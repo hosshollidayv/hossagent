@@ -78,6 +78,11 @@ from analytics import (
     track_page_view, track_funnel_event, track_event,
     EventType, get_analytics_summary, get_page_view_stats, get_funnel_stats
 )
+from services.dashboard_service import get_admin_metrics, get_pipeline_flow, get_daily_activity, get_recent_system_events
+from services.customer_service import get_customer_summary, list_customers, list_support_tickets, get_customer
+from services.opportunity_service import get_opportunity_detail as service_get_opportunity_detail, list_customer_opportunities
+from services.outbound_service import approve_pending_outbound, skip_pending_outbound, update_draft
+from services.signal_service import list_recent_signals, get_signal_summary, list_enrichment_metrics
 
 def get_ga_script() -> str:
     """Generate Google Analytics 4 script tag if measurement ID is configured."""
@@ -91,6 +96,372 @@ def get_ga_script() -> str:
         gtag('js', new Date());
         gtag('config', '{ga_id}');
     </script>'''
+
+
+def _render_metric_card(label: str, value: str, sublabel: str = "") -> str:
+    return f'''
+    <div class="metric-card">
+        <div class="metric-label">{label}</div>
+        <div class="metric-value">{value}</div>
+        <div class="metric-sublabel">{sublabel}</div>
+    </div>
+    '''
+
+
+def _render_badge(text: str, variant: str = "neutral") -> str:
+    return f'<span class="badge {variant}">{text}</span>'
+
+
+def _render_opportunity_card(opportunity: dict, show_actions: bool = False) -> str:
+    status = (opportunity.get("enrichment_status") or "").lower()
+    variant = "amber" if status == "enriched_no_outbound" else "green" if status == "outbound_sent" else "neutral"
+    action_html = ""
+    if show_actions:
+        action_html = f'''
+        <div class="card-actions">
+            <a class="button button-primary" href="/portal/opportunities/{opportunity['id']}">Review</a>
+            <form method="post" action="/portal/opportunities/{opportunity['id']}/skip"><button class="button button-secondary" type="submit">Skip</button></form>
+        </div>
+        '''
+    return f'''
+    <article class="opportunity-card">
+        <div class="card-top">
+            <div>
+                <div class="card-company">{opportunity.get('company_name', 'Unknown Company')}</div>
+                <div class="card-meta">{opportunity.get('location', '')} · {opportunity.get('signal_type', '')}</div>
+            </div>
+            <div class="stack-right">
+                {_render_badge(opportunity.get('enrichment_status', 'unknown').replace('_', ' ').title(), variant)}
+                <div class="score">{opportunity.get('urgency_score', 0)}</div>
+            </div>
+        </div>
+        <p class="card-copy">{html_escape(opportunity.get('why_now') or opportunity.get('raw_excerpt') or '')}</p>
+        <div class="card-footer">
+            <div>Confidence {opportunity.get('confidence_score', 0)}%</div>
+            <div>{html_escape(opportunity.get('recommended_angle') or 'Review opportunity')}</div>
+        </div>
+        {action_html}
+    </article>
+    '''
+
+
+def html_escape(value: Optional[str]) -> str:
+    import html as html_module
+    return html_module.escape(value or "")
+
+
+def _render_reasoning_trace(detail: dict) -> str:
+    extracted = detail.get("extracted_facts") or {}
+    signal_payload = detail.get("signal_payload") or {}
+    mission_items = detail.get("mission_log") or []
+    mission_html = "".join(
+        f'<li><span>{html_escape(str(item.get("timestamp", "")))}</span><strong>{html_escape(str(item.get("phase", item.get("action", ""))))}</strong><div>{html_escape(str(item.get("action", item.get("notes", ""))))}</div></li>'
+        for item in mission_items
+    ) or '<li><span>Queued</span><strong>No mission log</strong><div>Seed or process data to populate reasoning steps.</div></li>'
+    facts_html = "".join(f'<li><strong>{html_escape(str(k))}</strong><span>{html_escape(str(v))}</span></li>' for k, v in extracted.items()) or '<li><strong>Extracted facts</strong><span>None available yet</span></li>'
+    signal_fields = "".join(f'<li><strong>{html_escape(str(k))}</strong><span>{html_escape(str(v))}</span></li>' for k, v in signal_payload.items()) or '<li><strong>Source payload</strong><span>None available yet</span></li>'
+    return f'''
+    <section class="panel">
+        <h3>Reasoning Trace</h3>
+        <div class="trace-grid">
+            <ul class="trace-list">{signal_fields}</ul>
+            <ul class="trace-list">{facts_html}</ul>
+        </div>
+        <h4>Mission Log Timeline</h4>
+        <ol class="mission-timeline">{mission_html}</ol>
+    </section>
+    '''
+
+
+def _render_chart_bars(series: list[dict], value_key: str = "count") -> str:
+    if not series:
+        return '<div class="empty-state">No activity yet.</div>'
+    max_value = max(item.get(value_key, 0) for item in series) or 1
+    rows = []
+    for item in series:
+        pct = max(4, int((item.get(value_key, 0) / max_value) * 100))
+        rows.append(f'<div class="bar-row"><span>{html_escape(str(item.get("label") or item.get("day") or item.get("name") or ""))}</span><div class="bar"><i style="width:{pct}%"></i></div><strong>{item.get(value_key, 0)}</strong></div>')
+    return ''.join(rows)
+
+
+def _load_template(name: str) -> str:
+    with open(f"templates/{name}", "r") as file:
+        return file.read()
+
+
+def _render_opportunity_list_items(opportunities: list[dict], show_actions: bool = False) -> str:
+    if not opportunities:
+        return '<div class="empty-state">No actionable opportunities right now.</div>'
+    return "".join(_render_opportunity_card(item, show_actions=show_actions) for item in opportunities)
+
+
+def _render_signal_cards(signals: list) -> str:
+    if not signals:
+        return '<div class="empty-state">No signals yet.</div>'
+    cards = []
+    for signal in signals:
+        cards.append(f'''
+        <article class="signal-card">
+            <div class="signal-top">
+                <strong>{html_escape(signal.source_type or "signal")}</strong>
+                {_render_badge(signal.status or "ACTIVE", "green" if (signal.status or "").upper() == "PROMOTED" else "neutral")}
+            </div>
+            <p>{html_escape(signal.context_summary or "")}</p>
+            <div class="signal-meta">{html_escape(signal.geography or "")}</div>
+        </article>
+        ''')
+    return "".join(cards)
+
+
+def _render_ticket_rows(tickets: list[dict]) -> str:
+    if not tickets:
+        return '<div class="empty-state">No support tickets in the queue.</div>'
+    return "".join(
+        f'''<tr>
+            <td>{html_escape(ticket['customer'])}</td>
+            <td>{html_escape(ticket['subject'])}</td>
+            <td>{html_escape(str(ticket['status']))}</td>
+            <td>{html_escape(str(ticket['updated_at']))}</td>
+        </tr>'''
+        for ticket in tickets
+    )
+
+
+def _render_customer_rows(customers: list[dict]) -> str:
+    if not customers:
+        return '<tr><td colspan="7"><div class="empty-state">No customers yet.</div></td></tr>'
+    rows = []
+    for customer in customers:
+        rows.append(f'''
+        <tr>
+            <td>{html_escape(customer['company'])}</td>
+            <td>{html_escape(customer.get('plan', 'trial'))}</td>
+            <td>{html_escape(customer.get('status', 'active'))}</td>
+            <td>{html_escape(customer.get('outreach_mode', 'AUTO'))}</td>
+            <td>{customer.get('opportunities_generated', 0)}</td>
+            <td>{customer.get('pending_outbound', 0)}</td>
+            <td>{html_escape(str(customer.get('last_activity')))}</td>
+        </tr>
+        ''')
+    return "".join(rows)
+
+
+def _render_mission_log_cards(events: list[dict]) -> str:
+    if not events:
+        return '<div class="empty-state">No mission logs yet.</div>'
+    return "".join(
+        f'''<article class="system-event"><span>{html_escape(str(event['timestamp']))}</span><strong>{html_escape(event['label'])}</strong><em>{html_escape(event['status'])}</em></article>'''
+        for event in events
+    )
+
+
+def render_customer_portal_page(customer: Customer, request: Request, session: Session) -> HTMLResponse:
+    summary = get_customer_summary(session, customer.id)
+    opportunities = list_customer_opportunities(session, customer.id, filters={}, limit=24)
+    opportunities = [item for item in opportunities if item.get('enrichment_status') in {'ENRICHED_NO_OUTBOUND', 'OUTBOUND_SENT', 'SKIPPED'}]
+    signals = list_recent_signals(session, limit=8, customer_id=customer.id)
+    metrics = {
+        'opportunities': summary.get('opportunities_count', 0),
+        'pending': summary.get('pending_count', 0),
+        'signals': len(signals),
+    }
+    template = _load_template('customer_portal.html')
+    profile = summary.get('profile')
+    profile_html = f'''
+    <div class="panel stack">
+        <h3>Business Profile</h3>
+        <p>{html_escape(profile.short_description if profile and profile.short_description else 'Configure your profile to sharpen targeting.')}</p>
+        <div class="key-values">
+            <div><span>Industry</span><strong>{html_escape(customer.niche or 'Unspecified')}</strong></div>
+            <div><span>Geography</span><strong>{html_escape(customer.geography or 'Unspecified')}</strong></div>
+            <div><span>Tone</span><strong>{html_escape(profile.voice_tone if profile and profile.voice_tone else 'confident')}</strong></div>
+        </div>
+    </div>
+    '''
+    html = template.format(
+        company=html_escape(customer.company),
+        account_summary=_render_metric_card('Account Status', summary['plan_status'].status_label if summary.get('plan_status') else customer.plan, customer.outreach_mode),
+        performance_summary=''.join([
+            _render_metric_card('Open Opportunities', str(metrics['opportunities']), 'Actionable records'),
+            _render_metric_card('Pending Review', str(metrics['pending']), 'Awaiting approval'),
+            _render_metric_card('Signals Monitored', str(metrics['signals']), 'Recent signals'),
+        ]),
+        business_profile_summary=profile_html,
+        active_opportunities=_render_opportunity_list_items(opportunities, show_actions=True),
+        pending_outbound=''.join(
+            f'''<article class="review-card"><strong>{html_escape(item.to_name or item.to_email)}</strong><p>{html_escape(item.subject)}</p><div class="review-copy">{html_escape(item.context_summary or '')}</div><div class="status-line">{html_escape(item.status)}</div></article>'''
+            for item in summary.get('pending_outbound', [])
+        ) or '<div class="empty-state">No pending outbound reviews.</div>',
+        recent_signals=_render_signal_cards(signals),
+        page_actions=f'<a class="button button-primary" href="/portal/opportunities">View Opportunities</a><a class="button button-secondary" href="/portal/settings">Settings</a>',
+        page_title='Customer Portal',
+        page_subtitle='Review opportunities, outbound drafts, and signal activity in one place.'
+    )
+    return HTMLResponse(content=html)
+
+
+def render_opportunity_list_page(customer: Customer, request: Request, session: Session) -> HTMLResponse:
+    filters = {
+        'status': request.query_params.get('status'),
+        'signal_type': request.query_params.get('signal_type'),
+        'geography': request.query_params.get('geography'),
+        'high_urgency': request.query_params.get('high_urgency') == '1',
+    }
+    opportunities = list_customer_opportunities(session, customer.id, filters=filters, limit=100)
+    template = _load_template('portal_opportunities.html')
+    html = template.format(
+        company=html_escape(customer.company),
+        filters_html=''.join([
+            f'<a class="filter-pill{" active" if request.query_params.get("status") == value else ""}" href="/portal/opportunities?status={value}">{label}</a>'
+            for value, label in [("NEW", "New"), ("ENRICHED_NO_OUTBOUND", "Ready for review"), ("OUTBOUND_SENT", "Sent"), ("SKIPPED", "Skipped")]
+        ]) + ''.join([
+            f'<a class="filter-pill{" active" if request.query_params.get("high_urgency") == "1" else ""}" href="/portal/opportunities?high_urgency=1">High urgency</a>',
+        ]),
+        opportunity_cards=_render_opportunity_list_items(opportunities, show_actions=True),
+        page_title='Opportunities',
+        page_subtitle='Filter actionable opportunities by state, urgency, geography, or signal type.'
+    )
+    return HTMLResponse(content=html)
+
+
+def render_opportunity_detail_page(customer: Customer, request: Request, session: Session, opportunity_id: int) -> HTMLResponse:
+    detail = service_get_opportunity_detail(session, opportunity_id, customer_id=customer.id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    template = _load_template('portal_opportunity_detail.html')
+    outbound = detail.get('outbound')
+    approval_controls = f'''
+    <form method="post" action="/portal/opportunities/{opportunity_id}/approve"><button class="button button-primary" type="submit">Approve</button></form>
+    <form method="post" action="/portal/opportunities/{opportunity_id}/skip"><button class="button button-secondary" type="submit">Skip</button></form>
+    <form method="post" action="/portal/opportunities/{opportunity_id}/edit" class="edit-form">
+        <input name="subject" value="{html_escape(detail.get('outbound_subject') or '')}" placeholder="Subject">
+        <textarea name="body" rows="8" placeholder="Body">{html_escape(detail.get('outbound_body') or '')}</textarea>
+        <button class="button button-primary" type="submit">Save Draft</button>
+    </form>
+    '''
+    html = template.format(
+        company=html_escape(detail.get('company_name') or customer.company),
+        signal_source=html_escape(detail.get('signal_source') or detail.get('signal_type') or ''),
+        raw_signal_excerpt=html_escape(detail.get('raw_signal_excerpt') or ''),
+        extracted_facts=''.join(f'<li><strong>{html_escape(str(k))}</strong><span>{html_escape(str(v))}</span></li>' for k, v in (detail.get('extracted_facts') or {}).items()) or '<li><strong>Extracted facts</strong><span>None yet</span></li>',
+        signal_type=html_escape(detail.get('signal_type') or ''),
+        geography=html_escape(detail.get('geography') or ''),
+        baseline_reasoning=html_escape(detail.get('baseline_reasoning') or ''),
+        why_now=html_escape(detail.get('why_now') or ''),
+        second_order_effects=html_escape(detail.get('second_order_effects') or ''),
+        recommended_angle=html_escape(detail.get('recommended_angle') or ''),
+        urgency_score=detail.get('urgency_score', 0),
+        confidence_score=detail.get('confidence_score', 0),
+        enrichment_status=html_escape(detail.get('enrichment_status') or ''),
+        domain_confidence=detail.get('domain_confidence', 0),
+        email_confidence=detail.get('email_confidence', 0),
+        phone_confidence=detail.get('phone_confidence', 0),
+        mission_timeline=''.join(
+            f'<li><span>{html_escape(str(item.get("timestamp", "")))}</span><strong>{html_escape(str(item.get("phase", item.get("action", ""))))}</strong><div>{html_escape(str(item.get("action", item.get("notes", ""))))}</div></li>'
+            for item in (detail.get('mission_log') or [])
+        ) or '<li><span>No log</span><strong>No mission log available</strong><div>Seed or process data to populate this trace.</div></li>',
+        outbound_subject=html_escape(detail.get('outbound_subject') or ''),
+        outbound_body=html_escape(detail.get('outbound_body') or ''),
+        approval_controls=approval_controls,
+        detail_trace=_render_reasoning_trace(detail),
+        page_title='Opportunity Detail',
+        page_subtitle='Reasoning, enrichment, and outbound state in one trace.'
+    )
+    return HTMLResponse(content=html)
+
+
+def render_admin_dashboard_page(request: Request, session: Session) -> HTMLResponse:
+    template = _load_template('admin_console_new.html')
+    metrics = get_admin_metrics(session)
+    flow = get_pipeline_flow(session)
+    activity = get_daily_activity(session, days=7)
+    recent_events = get_recent_system_events(session, limit=12)
+    opportunity_status_counts = session.exec(select(LeadEvent.enrichment_status, func.count(LeadEvent.id)).group_by(LeadEvent.enrichment_status)).all()
+    enrichment_status_html = ''.join(f'<div class="stat-row"><span>{html_escape(str(status or "unknown"))}</span><strong>{count}</strong></div>' for status, count in opportunity_status_counts) or '<div class="empty-state">No opportunities yet.</div>'
+    html = template.format(
+        metric_cards=''.join([
+            _render_metric_card('Active Customers', str(metrics['active_customers']), 'Current subscriptions'),
+            _render_metric_card('Signals Ingested', str(metrics['signals_ingested']), 'Today'),
+            _render_metric_card('Leads Created', str(metrics['leads_created']), 'All time'),
+            _render_metric_card('Enrichment Rate', f"{metrics['enrichment_rate']}%", 'Domain and contact readiness'),
+            _render_metric_card('Outbound Drafts', str(metrics['outbound_drafts']), 'Awaiting review'),
+            _render_metric_card('Emails Sent', str(metrics['emails_sent']), 'Queued locally or sent'),
+        ]),
+        pipeline_flow=''.join([
+            f'<div class="flow-node"><strong>Signals</strong><span>{flow["signals"]}</span></div>',
+            f'<div class="flow-node"><strong>LeadEvents</strong><span>{flow["lead_events"]}</span></div>',
+            f'<div class="flow-node"><strong>Enriched</strong><span>{flow["enriched"]}</span></div>',
+            f'<div class="flow-node"><strong>Drafted</strong><span>{flow["drafted"]}</span></div>',
+            f'<div class="flow-node"><strong>Reviewed/Sent</strong><span>{flow["reviewed_sent"]}</span></div>',
+        ]),
+        daily_activity=_render_chart_bars([{'day': item['day'], 'count': item['count']} for item in activity]),
+        opportunity_distribution=enrichment_status_html,
+        enrichment_distribution=enrichment_status_html,
+        recent_events=_render_mission_log_cards(recent_events),
+        system_health=''.join([
+            f'<div class="health-indicator healthy"><span>Pipeline</span><strong>Live</strong></div>',
+            f'<div class="health-indicator healthy"><span>SignalNet</span><strong>Reachable</strong></div>',
+            f'<div class="health-indicator review"><span>Opportunity synthesis</span><strong>{metrics["opportunity_synthesis_rate"]}%</strong></div>',
+            f'<div class="health-indicator review"><span>HMX reachability delta</span><strong>{metrics["hmx_reachability_delta"]}</strong></div>',
+            f'<div class="health-indicator error"><span>Error rate</span><strong>{metrics["error_rate"]}%</strong></div>',
+        ]),
+        page_title='Operations Console',
+        page_subtitle='Signal ingestion, enrichment, outbound review, and system health.'
+    )
+    return HTMLResponse(content=html)
+
+
+def render_admin_customers_page(request: Request, session: Session) -> HTMLResponse:
+    template = _load_template('admin_customers.html')
+    html = template.format(
+        customer_rows=_render_customer_rows(list_customers(session)),
+        page_title='Customers',
+        page_subtitle='Customer management and account visibility.'
+    )
+    return HTMLResponse(content=html)
+
+
+def render_admin_support_page(request: Request, session: Session) -> HTMLResponse:
+    template = _load_template('admin_support.html')
+    tickets = list_support_tickets(session)
+    first_ticket = tickets[0] if tickets else None
+    detail_panel = '<div class="empty-state">Select a ticket to review it.</div>' if not first_ticket else f'''
+    <div class="panel stack">
+        <h3>{html_escape(first_ticket['subject'])}</h3>
+        <div class="status-line">{html_escape(first_ticket['status'])}</div>
+        <p>{html_escape(first_ticket['body'])}</p>
+        <textarea rows="8">{html_escape(first_ticket.get('internal_notes') or '')}</textarea>
+        <button class="button button-primary" type="button">Save</button>
+    </div>
+    '''
+    html = template.format(
+        ticket_rows=_render_ticket_rows(tickets),
+        reply_panel=detail_panel,
+        page_title='Support Inbox',
+        page_subtitle='Customer support tickets and reply handling.'
+    )
+    return HTMLResponse(content=html)
+
+
+def render_portal_settings_page(customer: Customer, request: Request, session: Session) -> HTMLResponse:
+    template = _load_template('portal_settings.html')
+    profile = get_customer_summary(session, customer.id).get('profile')
+    html = template.format(
+        company=html_escape(customer.company),
+        company_name=html_escape(customer.company),
+        industry=html_escape(customer.niche or ''),
+        geography=html_escape(customer.geography or ''),
+        target_customer_types=html_escape(profile.ideal_customer if profile and profile.ideal_customer else ''),
+        outreach_mode=html_escape(customer.outreach_mode),
+        preferred_tone=html_escape(profile.voice_tone if profile and profile.voice_tone else 'confident'),
+        sender_identity=html_escape(profile.primary_contact_name if profile and profile.primary_contact_name else customer.contact_name or ''),
+        reply_to_email=html_escape(profile.primary_contact_email if profile and profile.primary_contact_email else customer.contact_email),
+        exclusions=html_escape(profile.excluded_customers if profile and profile.excluded_customers else ''),
+        do_not_contact_rules=html_escape(profile.do_not_contact_list if profile and profile.do_not_contact_list else ''),
+        page_title='Settings',
+        page_subtitle='Business profile and outbound preferences.'
+    )
+    return HTMLResponse(content=html)
 from stripe_utils import (
     validate_stripe_at_startup,
     is_stripe_enabled,
@@ -1151,8 +1522,23 @@ def serve_admin_console(request: Request, session: Session = Depends(get_session
     if not verify_admin_session(admin_token):
         return RedirectResponse(url="/admin/login", status_code=303)
     
-    with open("templates/admin_console_new.html", "r") as f:
-        return f.read()
+    return render_admin_dashboard_page(request, session)
+
+
+@app.get("/admin/customers", response_class=HTMLResponse)
+def serve_admin_customers(request: Request, session: Session = Depends(get_session)):
+    admin_token = request.cookies.get(ADMIN_COOKIE_NAME)
+    if not verify_admin_session(admin_token):
+        return RedirectResponse(url="/admin/login", status_code=303)
+    return render_admin_customers_page(request, session)
+
+
+@app.get("/admin/support", response_class=HTMLResponse)
+def serve_admin_support(request: Request, session: Session = Depends(get_session)):
+    admin_token = request.cookies.get(ADMIN_COOKIE_NAME)
+    if not verify_admin_session(admin_token):
+        return RedirectResponse(url="/admin/login", status_code=303)
+    return render_admin_support_page(request, session)
 
 
 @app.get("/admin/diagnostics", response_class=HTMLResponse)
@@ -1225,8 +1611,8 @@ def portal_session_based(request: Request, session: Session = Depends(get_sessio
         return RedirectResponse(url="/login", status_code=303)
     
     track_funnel_event(EventType.PORTAL_VIEW, customer_id=customer.id)
-    
-    return render_customer_portal(customer, request, session)
+
+    return render_customer_portal_page(customer, request, session)
 
 
 @app.get("/portal/settings", response_class=HTMLResponse)
@@ -4040,7 +4426,92 @@ def customer_portal_token(public_token: str, request: Request, session: Session 
     if not customer:
         raise HTTPException(status_code=404, detail="Portal not found")
     
-    return render_customer_portal(customer, request, session)
+    return render_customer_portal_page(customer, request, session)
+
+
+@app.get("/portal/opportunities", response_class=HTMLResponse)
+def portal_opportunities_list(request: Request, session: Session = Depends(get_session)):
+    session_token = request.cookies.get(SESSION_COOKIE_NAME)
+    customer = get_customer_from_session(session, session_token)
+    if not customer:
+        return RedirectResponse(url="/login", status_code=303)
+    return render_opportunity_list_page(customer, request, session)
+
+
+@app.get("/portal/opportunities/{opportunity_id}", response_class=HTMLResponse)
+def portal_opportunity_detail(opportunity_id: int, request: Request, session: Session = Depends(get_session)):
+    session_token = request.cookies.get(SESSION_COOKIE_NAME)
+    customer = get_customer_from_session(session, session_token)
+    if not customer:
+        return RedirectResponse(url="/login", status_code=303)
+    return render_opportunity_detail_page(customer, request, session, opportunity_id)
+
+
+@app.post("/portal/opportunities/{opportunity_id}/approve")
+def portal_opportunity_approve(opportunity_id: int, request: Request, session: Session = Depends(get_session)):
+    session_token = request.cookies.get(SESSION_COOKIE_NAME)
+    customer = get_customer_from_session(session, session_token)
+    if not customer:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    outbound = session.exec(
+        select(PendingOutbound).where(PendingOutbound.lead_event_id == opportunity_id, PendingOutbound.customer_id == customer.id).order_by(PendingOutbound.created_at.desc())
+    ).first()
+    if not outbound:
+        raise HTTPException(status_code=404, detail="Outbound draft not found")
+    approve_pending_outbound(session, outbound.id)
+    return RedirectResponse(url=f"/portal/opportunities/{opportunity_id}", status_code=303)
+
+
+@app.post("/portal/opportunities/{opportunity_id}/skip")
+def portal_opportunity_skip(opportunity_id: int, request: Request, session: Session = Depends(get_session)):
+    session_token = request.cookies.get(SESSION_COOKIE_NAME)
+    customer = get_customer_from_session(session, session_token)
+    if not customer:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    outbound = session.exec(
+        select(PendingOutbound).where(PendingOutbound.lead_event_id == opportunity_id, PendingOutbound.customer_id == customer.id).order_by(PendingOutbound.created_at.desc())
+    ).first()
+    if not outbound:
+        raise HTTPException(status_code=404, detail="Outbound draft not found")
+    skip_pending_outbound(session, outbound.id)
+    return RedirectResponse(url=f"/portal/opportunities/{opportunity_id}", status_code=303)
+
+
+@app.post("/portal/opportunities/{opportunity_id}/edit")
+def portal_opportunity_edit(
+    opportunity_id: int,
+    subject: str = Form(...),
+    body: str = Form(...),
+    request: Request = None,
+    session: Session = Depends(get_session)
+):
+    session_token = request.cookies.get(SESSION_COOKIE_NAME)
+    customer = get_customer_from_session(session, session_token)
+    if not customer:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    outbound = session.exec(
+        select(PendingOutbound).where(PendingOutbound.lead_event_id == opportunity_id, PendingOutbound.customer_id == customer.id).order_by(PendingOutbound.created_at.desc())
+    ).first()
+    if not outbound:
+        raise HTTPException(status_code=404, detail="Outbound draft not found")
+    update_draft(session, outbound.id, subject, body)
+    return RedirectResponse(url=f"/portal/opportunities/{opportunity_id}", status_code=303)
+
+
+@app.get("/health")
+def health_check():
+    return {
+        "status": "ok",
+        "service": "hossagent",
+        "timestamp": datetime.utcnow().isoformat(),
+        "database": "not_checked",
+        "release_mode": is_release_mode(),
+    }
+
+
+@app.get("/api/health")
+def health_check_api():
+    return health_check()
 
 
 @app.get("/subscribe/{public_token}")

@@ -3,260 +3,131 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HossAgent - Autonomous Opportunity Detection</title>
-    <!-- Google Analytics 4 -->
-    {ga_script}
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-primary: #0a0a0a;
-            --bg-secondary: #111111;
-            --bg-tertiary: #1a1a1a;
-            --border-subtle: #1f1f1f;
-            --border-medium: #2a2a2a;
-            --text-primary: #ffffff;
-            --text-secondary: #a0a0a0;
-            --text-tertiary: #666666;
-            --accent-green: #22c55e;
-            --accent-green-dim: rgba(34, 197, 94, 0.15);
-            --accent-blue: #3b82f6;
-            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        html {
-            scroll-behavior: smooth;
-        }
-        
-        body {
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            font-family: var(--font-sans);
-            line-height: 1.6;
-            font-size: 16px;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 2rem;
-        }
-        
-        /* Navigation */
-        nav {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            background: rgba(10, 10, 10, 0.8);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-bottom: 1px solid var(--border-subtle);
-        }
-        
-        .nav-inner {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            height: 72px;
-        }
-        
-        .logo {
-            font-size: 1.25rem;
-            font-weight: 600;
-            letter-spacing: -0.02em;
-            color: var(--text-primary);
-            text-decoration: none;
-        }
-        
-        .nav-links {
-            display: flex;
-            align-items: center;
-            gap: 2rem;
-        }
-        
-        .nav-links a {
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.9rem;
-            font-weight: 400;
-            transition: color 0.2s ease;
-        }
-        
-        .nav-links a:hover {
-            color: var(--text-primary);
-        }
-        
-        .nav-cta {
-            background: var(--text-primary);
-            color: var(--bg-primary);
-            padding: 0.625rem 1.25rem;
-            border-radius: 6px;
-            font-weight: 500;
-            font-size: 0.875rem;
-            transition: all 0.2s ease;
-        }
-        
-        .nav-cta:hover {
-            background: var(--text-secondary);
-            color: var(--bg-primary);
-        }
-        
-        /* Hero Section */
-        .hero {
-            padding: 10rem 0 6rem;
-            text-align: center;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .hero::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 100%;
-            max-width: 800px;
-            height: 400px;
-            background: radial-gradient(ellipse at center, rgba(34, 197, 94, 0.08) 0%, transparent 70%);
-            pointer-events: none;
-        }
-        
-        .hero h1 {
-            font-size: clamp(2.5rem, 5vw, 3.75rem);
-            font-weight: 500;
-            letter-spacing: -0.03em;
-            line-height: 1.1;
-            margin-bottom: 1.5rem;
-            max-width: 900px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-        
-        .hero .tagline {
-            font-size: clamp(1.1rem, 2vw, 1.35rem);
-            color: var(--text-secondary);
-            max-width: 680px;
-            margin: 0 auto 3rem;
-            line-height: 1.7;
-            font-weight: 300;
-        }
-        
-        .cta-buttons {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-            flex-wrap: wrap;
-            margin-bottom: 4rem;
-        }
-        
-        .btn-primary {
-            background: var(--text-primary);
-            color: var(--bg-primary);
-            padding: 1rem 2rem;
-            text-decoration: none;
-            font-size: 1rem;
-            font-weight: 500;
-            border-radius: 8px;
-            transition: all 0.2s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(255, 255, 255, 0.12);
-        }
-        
-        .btn-secondary {
-            background: transparent;
-            color: var(--text-secondary);
-            padding: 1rem 2rem;
-            text-decoration: none;
-            font-size: 1rem;
-            border: 1px solid var(--border-medium);
-            border-radius: 8px;
-            transition: all 0.2s ease;
-        }
-        
-        .btn-secondary:hover {
-            border-color: var(--text-secondary);
-            color: var(--text-primary);
-        }
-        
-        .quick-links {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 1.5rem;
-            margin-top: 2rem;
-        }
-        
-        .quick-links a {
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.9rem;
-            transition: color 0.2s ease;
-        }
-        
-        .quick-links a:hover {
-            color: var(--text-primary);
-        }
-        
-        .quick-links .divider {
-            width: 1px;
-            height: 16px;
-            background: var(--border-medium);
-        }
-        
-        /* Value Prop Banner */
-        .value-prop {
-            text-align: center;
-            padding: 3rem 0;
-            border-top: 1px solid var(--border-subtle);
-            border-bottom: 1px solid var(--border-subtle);
-            background: var(--bg-secondary);
-        }
-        
-        .value-prop p {
-            font-size: 1.125rem;
-            color: var(--text-secondary);
-            max-width: 700px;
-            margin: 0 auto;
-            line-height: 1.8;
-            font-weight: 300;
-        }
-        
-        .value-prop p span {
-            display: block;
-            margin-bottom: 0.5rem;
-        }
-        
-        /* How It Works */
-        .how-it-works {
-            padding: 6rem 0;
-        }
-        
-        .section-header {
-            text-align: center;
-            margin-bottom: 4rem;
-        }
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>HossAgent - Autonomous Signal Intelligence</title>
+        {ga_script}
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+        <style>
+            :root {{
+                --bg: #07110d;
+                --panel: #0d1713;
+                --panel-2: #111e19;
+                --border: #1f3129;
+                --text: #f3f7f4;
+                --muted: #95a79f;
+                --green: #4ade80;
+                --amber: #fbbf24;
+                --red: #ef4444;
+                --shadow: 0 20px 80px rgba(0, 0, 0, 0.35);
+            }}
+            * {{ box-sizing: border-box; }}
+            body {{ margin: 0; font-family: Inter, system-ui, sans-serif; background: radial-gradient(circle at top, rgba(74, 222, 128, 0.14), transparent 32%), var(--bg); color: var(--text); }}
+            a {{ color: inherit; text-decoration: none; }}
+            .nav {{ position: sticky; top: 0; z-index: 20; backdrop-filter: blur(18px); background: rgba(7, 17, 13, 0.8); border-bottom: 1px solid var(--border); }}
+            .nav-inner {{ max-width: 1240px; margin: 0 auto; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }}
+            .brand {{ display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: -0.03em; }}
+            .brand-mark {{ width: 12px; height: 12px; border-radius: 999px; background: var(--green); box-shadow: 0 0 0 6px rgba(74, 222, 128, 0.12); }}
+            .nav-links {{ display: flex; gap: 20px; color: var(--muted); font-size: 14px; }}
+            .nav-links a:hover {{ color: var(--text); }}
+            .nav-cta {{ padding: 11px 16px; border-radius: 999px; border: 1px solid var(--border); background: rgba(255,255,255,0.02); color: var(--text); font-weight: 600; }}
+            .hero {{ max-width: 1240px; margin: 0 auto; padding: 88px 24px 44px; display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 28px; align-items: start; }}
+            .eyebrow {{ color: var(--green); text-transform: uppercase; letter-spacing: 0.16em; font-size: 12px; font-weight: 700; margin-bottom: 18px; }}
+            h1 {{ font-size: clamp(42px, 7vw, 76px); line-height: 0.96; margin: 0 0 18px; letter-spacing: -0.06em; }}
+            .lead {{ color: var(--muted); font-size: 18px; line-height: 1.7; max-width: 680px; }}
+            .actions {{ display: flex; flex-wrap: wrap; gap: 14px; margin-top: 28px; }}
+            .button {{ padding: 14px 18px; border-radius: 14px; font-weight: 700; border: 1px solid var(--border); display: inline-flex; align-items: center; justify-content: center; gap: 8px; }}
+            .button-primary {{ background: var(--green); color: #05110a; border-color: transparent; }}
+            .button-secondary {{ background: rgba(255,255,255,0.02); color: var(--text); }}
+            .panel {{ background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent), var(--panel); border: 1px solid var(--border); border-radius: 22px; box-shadow: var(--shadow); padding: 22px; }}
+            .stat-grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }}
+            .mini-stat {{ background: var(--panel-2); border: 1px solid var(--border); border-radius: 18px; padding: 16px; }}
+            .mini-stat span {{ display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }}
+            .mini-stat strong {{ display: block; font-size: 28px; margin-top: 8px; }}
+            .section {{ max-width: 1240px; margin: 0 auto; padding: 0 24px 28px; }}
+            .section-grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }}
+            .feature {{ padding: 22px; border-radius: 20px; background: var(--panel); border: 1px solid var(--border); min-height: 170px; }}
+            .feature h3 {{ margin: 0 0 10px; font-size: 18px; }}
+            .feature p {{ margin: 0; color: var(--muted); line-height: 1.65; }}
+            .workflow {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }}
+            .step {{ padding: 18px; border-radius: 18px; background: var(--panel); border: 1px solid var(--border); }}
+            .step-num {{ color: var(--green); font-family: "JetBrains Mono", monospace; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }}
+            .step h4 {{ margin: 10px 0 8px; }}
+            .step p {{ margin: 0; color: var(--muted); line-height: 1.6; font-size: 14px; }}
+            .footer {{ max-width: 1240px; margin: 0 auto; padding: 34px 24px 52px; color: var(--muted); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }}
+            @media (max-width: 980px) {{ .hero, .section-grid, .workflow {{ grid-template-columns: 1fr; }} .nav-links {{ display: none; }} }}
+        </style>
+    </head>
+    <body>
+        <header class="nav">
+            <div class="nav-inner">
+                <a class="brand" href="/"><span class="brand-mark"></span><span>HossAgent</span></a>
+                <nav class="nav-links">
+                    <a href="/about">About</a>
+                    <a href="/how-it-works">How it works</a>
+                    <a href="/admin">Operations</a>
+                    <a href="/portal">Portal</a>
+                </nav>
+                <div class="nav-links">
+                    <a class="nav-cta" href="/login">Log in</a>
+                    <a class="nav-cta" href="/signup">Start trial</a>
+                </div>
+            </div>
+        </header>
+
+        <section class="hero">
+            <div>
+                <div class="eyebrow">Autonomous business intelligence</div>
+                <h1>Turn public signals into ready-to-review outbound opportunities.</h1>
+                <p class="lead">HossAgent monitors market signals, extracts context, reasons about commercial relevance, enriches entities, and routes outbound through a customer approval workflow. It is built for operators who want a live system, not a page full of dashboards.</p>
+                <div class="actions">
+                    <a class="button button-primary" href="/login">Log in</a>
+                    <a class="button button-secondary" href="/signup">Start trial</a>
+                    <a class="button button-secondary" href="/how-it-works">View how it works</a>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="stat-grid">
+                    <div class="mini-stat"><span>Signals</span><strong>Live</strong></div>
+                    <div class="mini-stat"><span>Pipeline</span><strong>Operational</strong></div>
+                    <div class="mini-stat"><span>Outbound</span><strong>Reviewed</strong></div>
+                    <div class="mini-stat"><span>Enrichment</span><strong>Tracked</strong></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-grid">
+                <div class="feature"><h3>Signal intelligence</h3><p>SignalNet watches public market changes and turns them into structured LeadEvents with source context attached.</p></div>
+                <div class="feature"><h3>Opportunity reasoning</h3><p>BaselineRecall and related reasoning layers decide whether a signal is worth acting on now.</p></div>
+                <div class="feature"><h3>Outbound review</h3><p>Customers can approve, edit, or skip outbound before anything leaves the system.</p></div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="panel">
+                <div class="eyebrow">Workflow</div>
+                <div class="workflow">
+                    <div class="step"><div class="step-num">01</div><h4>SignalNet</h4><p>Monitors public business signals and identifies changes worth analyzing.</p></div>
+                    <div class="step"><div class="step-num">02</div><h4>ArticleStorm</h4><p>Extracts source context and stores the raw signal trace for review.</p></div>
+                    <div class="step"><div class="step-num">03</div><h4>BaselineRecall</h4><p>Scores relevance and explains why the moment matters commercially.</p></div>
+                    <div class="step"><div class="step-num">04</div><h4>ARCHANGEL / HMX</h4><p>Enriches company and contact data with domains, phones, and confidence.</p></div>
+                    <div class="step"><div class="step-num">05</div><h4>Outbound Review</h4><p>Routes the draft into a customer approval flow before send or skip.</p></div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <div>HossAgent for signal intelligence, enrichment, and outbound review.</div>
+            <div><a href="/admin">Operations</a> · <a href="/portal">Portal</a> · <a href="/about">About</a></div>
+        </footer>
+    </body>
+    </html>
         
         .section-label {
             font-family: var(--font-mono);
