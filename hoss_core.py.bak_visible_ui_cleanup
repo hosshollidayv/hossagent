@@ -1,0 +1,559 @@
+from collections import defaultdict
+from datetime import date, timedelta, datetime
+import re
+import requests
+
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel
+
+app = FastAPI(title="HossAgent Core")
+
+class ScanRequest(BaseModel):
+    workspace: str = "Scale AI"
+    business_unit: str = "Public Sector"
+    market: str = "Federal AI Model Assurance"
+
+HARD_AI_TERMS = [
+    "artificial intelligence",
+    "machine learning",
+    "model evaluation",
+    "model testing",
+    "model assurance",
+    "data labeling",
+    "data annotation",
+    "ai red team",
+    "red team",
+    "large language model",
+    "llm",
+    "computer vision",
+    "natural language processing",
+]
+
+SOFT_ADJACENCY_TERMS = [
+    "test and evaluation",
+    "autonomy",
+    "simulation",
+    "analytics",
+    "decision support",
+]
+
+KEYWORDS = HARD_AI_TERMS + SOFT_ADJACENCY_TERMS
+
+def money(v):
+    try:
+        v = float(v or 0)
+    except Exception:
+        v = 0
+    if v >= 1_000_000_000:
+        return f"${v/1_000_000_000:.1f}B"
+    if v >= 1_000_000:
+        return f"${v/1_000_000:.1f}M"
+    if v >= 1_000:
+        return f"${v/1_000:.0f}K"
+    return f"${v:.0f}"
+
+def parse_date(value):
+    if not value:
+        return None
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(value[:19], fmt).date()
+        except Exception:
+            pass
+    return None
+
+def keyword_hits(text):
+    low = (text or "").lower()
+    hard = [k for k in HARD_AI_TERMS if k in low]
+    soft = [k for k in SOFT_ADJACENCY_TERMS if k in low]
+    return hard, soft
+
+def fetch_usaspending_awards(market):
+    end = date.today()
+    start = end - timedelta(days=365 * 2)
+
+    base_body = {
+        "filters": {
+            "time_period": [{"start_date": start.isoformat(), "end_date": end.isoformat()}],
+            "keywords": KEYWORDS,
+            "award_type_codes": ["A", "B", "C", "D"]
+        },
+        "fields": [
+            "Award ID",
+            "Recipient Name",
+            "Awarding Agency",
+            "Awarding Sub Agency",
+            "Start Date",
+            "End Date",
+            "Award Amount",
+            "Description"
+        ],
+        "limit": 100,
+        "sort": "Award Amount",
+        "order": "desc",
+        "subawards": False
+    }
+
+    all_results = []
+    # USAspending sorted by award amount tends to surface giant older vehicles first.
+    # Pull several pages, then let our freshness / AI-specific filters do the real work.
+    for page in range(1, 8):
+        body = dict(base_body)
+        body["page"] = page
+
+        r = requests.post(
+            "https://api.usaspending.gov/api/v2/search/spending_by_award/",
+            json=body,
+            timeout=20
+        )
+        r.raise_for_status()
+
+        page_results = r.json().get("results", [])
+        if not page_results:
+            break
+
+        all_results.extend(page_results)
+
+    return all_results
+
+
+def build_opportunities(results):
+    total_records = len(results)
+    retained_records = 0
+    excluded_records = 0
+    excluded_old_records = 0
+    cutoff_date = date.today() - timedelta(days=365 * 2)
+
+    grouped = defaultdict(lambda: {
+        "agency": "",
+        "amount": 0,
+        "awards": [],
+        "hard_keywords": set(),
+        "soft_keywords": set(),
+        "existing_footprint": False,
+    })
+
+    for row in results:
+        parent_agency = row.get("Awarding Agency") or "Unknown Agency"
+        sub_agency = row.get("Awarding Sub Agency") or ""
+        agency = sub_agency if sub_agency and sub_agency != parent_agency else parent_agency
+        desc = row.get("Description") or ""
+        start_date_value = row.get("Start Date")
+        parsed_start_date = parse_date(start_date_value)
+
+        # Trust rule:
+        # If we claim a 24-month evidence window, old awards cannot appear as evidence.
+        if parsed_start_date and parsed_start_date < cutoff_date:
+            excluded_old_records += 1
+            continue
+
+        hard_hits, soft_hits = keyword_hits(desc)
+
+        # Product rule:
+        # Do NOT treat generic "test and evaluation" as AI opportunity evidence by itself.
+        # Keep records only if they contain hard AI language, or multiple soft adjacency signals.
+        if not hard_hits and len(soft_hits) < 2:
+            excluded_records += 1
+            continue
+
+        retained_records += 1
+
+        amt = float(row.get("Award Amount") or 0)
+        recipient = row.get("Recipient Name") or ""
+        is_existing_footprint = "scale ai" in recipient.lower()
+
+        g = grouped[agency]
+        g["agency"] = agency
+        g["parent_agency"] = parent_agency
+        g["amount"] += amt
+        g["hard_keywords"].update(hard_hits)
+        g["soft_keywords"].update(soft_hits)
+        if is_existing_footprint:
+            g["existing_footprint"] = True
+        g["awards"].append({
+            "award_id": row.get("Award ID"),
+            "recipient": recipient,
+            "is_existing_footprint": is_existing_footprint,
+            "parent_agency": parent_agency,
+            "sub_agency": sub_agency,
+            "amount": amt,
+            "amount_display": money(amt),
+            "start_date": start_date_value,
+            "description": desc[:300] + ("..." if len(desc) > 300 else ""),
+            "hard_keywords": hard_hits,
+            "soft_keywords": soft_hits
+        })
+
+    opps = []
+    for agency, g in grouped.items():
+        evidence_count = len(g["awards"])
+        hard_count = len(g["hard_keywords"])
+        soft_count = len(g["soft_keywords"])
+        spend = g["amount"]
+
+        # Buyer-propensity score, not deal forecast.
+        # Hard AI language matters more than broad historical spend.
+        score = min(99, int(
+            45
+            + min(evidence_count, 10) * 2.5
+            + min(hard_count, 8) * 5.0
+            + min(soft_count, 5) * 1.5
+            + min(spend / 25_000_000, 10)
+            + (12 if g["existing_footprint"] else 0)
+        ))
+
+        if g["existing_footprint"] and hard_count > 0:
+            score = max(score, 87)
+            status = "green"
+            status_label = "Expansion candidate"
+        elif score >= 82:
+            status = "green"
+            status_label = "High confidence"
+        elif score >= 65:
+            status = "amber"
+            status_label = "Medium confidence"
+        else:
+            status = "red"
+            status_label = "Watchlist"
+
+        top_awards = sorted(g["awards"], key=lambda x: x["amount"], reverse=True)[:5]
+        hard_keywords = sorted(g["hard_keywords"])[:8]
+        soft_keywords = sorted(g["soft_keywords"])[:6]
+
+        if not hard_keywords:
+            continue
+
+        opps.append({
+            "account": agency,
+            "score": score,
+            "status": status,
+            "status_label": status_label,
+            "detected_spend": money(spend),
+            "motion": "Expansion / Existing Footprint" if g["existing_footprint"] else "New Account Signal",
+            "window": "Award evidence from last 24 months",
+            "why": f"{agency} shows {evidence_count} recent award records with hard AI/model/data language totaling {money(spend)}. " + ("Scale AI appears in award history, making this an existing-footprint expansion signal. " if g["existing_footprint"] else "") + f"Hard AI evidence: {', '.join(hard_keywords)}. Adjacent evidence: {', '.join(soft_keywords) if soft_keywords else 'none detected'}.",
+            "evidence": [
+                {
+                    "status": "green" if a["hard_keywords"] else "amber",
+                    "source": "USAspending award",
+                    "detail": f"Award {a.get('award_id') or 'unknown'} · {a.get('start_date') or 'unknown date'} · {a['amount_display']} · {a.get('parent_agency') or 'Unknown parent agency'} · {a.get('sub_agency') or 'Unknown sub-agency'} · {a.get('recipient') or 'Unknown recipient'}" + (" · EXISTING SCALE FOOTPRINT" if a.get("is_existing_footprint") else "") + f" · matched hard terms: {', '.join(a['hard_keywords']) if a['hard_keywords'] else 'none'} · matched soft terms: {', '.join(a['soft_keywords']) if a['soft_keywords'] else 'none'} · {a.get('description') or 'No description'}"
+                }
+                for a in top_awards
+            ],
+            "recommended_action": (f"Treat {agency} as an existing-footprint expansion account. Next: check SAM.gov for active solicitations, identify the incumbent program context, and build an expansion brief around model evaluation and mission AI readiness." if g["existing_footprint"] else f"Treat {agency} as a recommended account, not a confirmed active opportunity. Next: check SAM.gov for active solicitations and validate whether current buying motion exists.")
+        })
+
+    final = sorted(opps, key=lambda x: x["score"], reverse=True)[:12]
+    return {
+        "opportunities": final,
+        "filter_stats": {
+            "records_fetched": total_records,
+            "records_retained": retained_records,
+            "records_excluded": excluded_records,
+            "records_excluded_old": excluded_old_records,
+            "buyer_groups": len(final),
+            "cutoff_date": cutoff_date.isoformat(),
+            "filter_rule": "Retain records from the last 24 months with hard AI/model/data terms, or at least two soft adjacency terms. Generic test-and-evaluation alone is excluded."
+        }
+    }
+
+
+def fetch_federal_register_documents(market):
+    end = date.today()
+    start = end - timedelta(days=365 * 2)
+
+    terms = [
+        "artificial intelligence",
+        "machine learning",
+        "automated decision",
+        "algorithmic",
+        "model evaluation",
+        "AI"
+    ]
+
+    docs = []
+    seen = set()
+
+    for term in terms:
+        params = {
+            "conditions[term]": term,
+            "conditions[publication_date][gte]": start.isoformat(),
+            "conditions[publication_date][lte]": end.isoformat(),
+            "order": "newest",
+            "per_page": 20,
+        }
+
+        r = requests.get(
+            "https://www.federalregister.gov/api/v1/documents.json",
+            params=params,
+            timeout=20
+        )
+        r.raise_for_status()
+
+        for doc in r.json().get("results", []):
+            doc_id = doc.get("document_number") or doc.get("html_url") or doc.get("title")
+            if not doc_id or doc_id in seen:
+                continue
+            seen.add(doc_id)
+            docs.append(doc)
+
+    return docs
+
+
+def build_federal_register_signals(docs):
+    grouped = defaultdict(lambda: {
+        "agency": "",
+        "docs": [],
+        "keywords": set(),
+    })
+
+    for doc in docs:
+        title = doc.get("title") or ""
+        abstract = doc.get("abstract") or ""
+        text = f"{title} {abstract}"
+        hard_hits = keyword_hits(text)
+
+        low = text.lower()
+        soft_hits = [
+            term for term in [
+                "risk",
+                "security",
+                "evaluation",
+                "testing",
+                "governance",
+                "procurement",
+                "standards",
+                "policy"
+            ]
+            if term in low
+        ]
+
+        if not hard_hits and len(soft_hits) < 2:
+            continue
+
+        agencies = doc.get("agencies") or []
+        agency = "Unknown Agency"
+        if agencies and isinstance(agencies, list):
+            agency = agencies[0].get("name") or agency
+
+        g = grouped[agency]
+        g["agency"] = agency
+        g["keywords"].update(hard_hits)
+        g["docs"].append({
+            "title": title,
+            "publication_date": doc.get("publication_date"),
+            "type": doc.get("type"),
+            "url": doc.get("html_url"),
+            "abstract": abstract,
+            "hard_keywords": hard_hits,
+            "soft_keywords": soft_hits,
+        })
+
+    opportunities = []
+
+    for agency, g in grouped.items():
+        docs_for_agency = sorted(
+            g["docs"],
+            key=lambda d: d.get("publication_date") or "",
+            reverse=True
+        )
+
+        evidence_count = len(docs_for_agency)
+        hard_keywords = sorted(g["keywords"]) or ["AI-related policy movement"]
+
+        score = min(78, int(
+            48
+            + min(evidence_count * 7, 20)
+            + min(len(hard_keywords) * 4, 10)
+        ))
+
+        if score >= 82:
+            status = "green"
+            status_label = "High confidence"
+        elif score >= 65:
+            status = "amber"
+            status_label = "Medium confidence"
+        else:
+            status = "red"
+            status_label = "Watchlist"
+
+        opportunities.append({
+            "agency": agency,
+            "score": score,
+            "status": status,
+            "status_label": status_label,
+            "detected_spend": "N/A",
+            "motion": "Regulatory / Policy Movement",
+            "evidence_window": "Federal Register evidence from last 24 months",
+            "why": f"{agency} shows {evidence_count} recent Federal Register document(s) with AI/model/algorithm language. This is policy movement, not spend history. Evidence terms: {', '.join(hard_keywords)}.",
+            "signals": [
+                {
+                    "label": "Federal Register document",
+                    "detail": f"{d.get('publication_date') or 'unknown date'} · {d.get('type') or 'document'} · matched hard terms: {', '.join(d['hard_keywords']) if d['hard_keywords'] else 'none'} · matched soft terms: {', '.join(d['soft_keywords']) if d['soft_keywords'] else 'none'} · {d.get('title') or 'Untitled'}"
+                }
+                for d in docs_for_agency[:4]
+            ],
+            "recommended_action": f"Treat {agency} as a policy-movement account. Next: pair this Federal Register signal with USAspending and SAM.gov evidence to determine whether there is funded buying motion behind the regulatory activity."
+        })
+
+    return sorted(opportunities, key=lambda x: x["score"], reverse=True)
+
+@app.post("/api/market-scan")
+async def market_scan(req: ScanRequest):
+    # Public Sector is currently wired to USAspending.
+    # Commercial Enterprise is intentionally empty until we add commercial connectors.
+    if req.business_unit != "Public Sector":
+        return JSONResponse({
+            "workspace": req.workspace,
+            "business_unit": req.business_unit,
+            "market": req.market,
+            "status": "empty",
+            "message": "Commercial Enterprise scan is planned yet. Federal USAspending data is intentionally suppressed for this business unit.",
+            "source_status": [
+                {"name": "Company News / Press", "status": "not wired", "job": "Detect announcements, launches, partnerships, and expansion signals."},
+                {"name": "SEC Filings", "status": "not wired", "job": "Detect risk, investment, AI strategy, and enterprise buying intent."},
+                {"name": "Job Postings", "status": "not wired", "job": "Detect hiring velocity by function, capability, and region."},
+                {"name": "Technology Pages", "status": "not wired", "job": "Detect stack changes, AI adoption, security posture, and vendor fit."},
+                {"name": "Competitive Movement", "status": "not wired", "job": "Detect competitor positioning and account-entry opportunities."}
+            ],
+            "opportunities": []
+        })
+
+    try:
+        results = fetch_usaspending_awards(req.market)
+        scan_result = build_opportunities(results)
+        opportunities = scan_result["opportunities"]
+        return JSONResponse({
+            "workspace": req.workspace,
+            "business_unit": req.business_unit,
+            "market": req.market,
+            "status": "live",
+            "message": f"Fetched {len(results)} USAspending award records. Retained {scan_result['filter_stats']['records_retained']} after AI-specific filtering and grouped them into {len(opportunities)} account signals.",
+            "filter_stats": scan_result["filter_stats"],
+            "source_status": [
+                {"name": "USAspending", "status": "live", "job": "Find recent award history, agencies, vendors, and spend patterns."},
+                {"name": "SAM.gov", "status": "not wired", "job": "Find active federal opportunities and solicitations. Requires SAM.gov API key."},
+                {"name": "Federal Careers / Hiring", "status": "not wired", "job": "Detect hiring velocity by agency, program, and capability."},
+                {"name": "News / Press", "status": "not wired", "job": "Detect market movement, executive signals, and strategic announcements."},
+                {"name": "Company / Competitor Signals", "status": "not wired", "job": "Detect vendor positioning and competitive movement."}
+            ],
+            "opportunities": opportunities
+        })
+    except Exception as e:
+        return JSONResponse({
+            "workspace": req.workspace,
+            "business_unit": req.business_unit,
+            "market": req.market,
+            "status": "error",
+            "message": f"Live USAspending fetch failed: {type(e).__name__}: {str(e)}",
+            "source_status": [
+                {"name": "USAspending", "status": "error", "job": "Find recent award history, agencies, vendors, and spend patterns."},
+                {"name": "SAM.gov", "status": "not wired", "job": "Find active federal opportunities and solicitations. Requires SAM.gov API key."}
+            ],
+            "opportunities": []
+        }, status_code=200)
+
+@app.get("/", response_class=HTMLResponse)
+async def home():
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HossAgent Core</title>
+<style>
+:root{--bg:#020203;--panel:#080808;--panel2:#11100d;--line:#232832;--line2:#3b4654;--text:#f8fbff;--muted:#c9d3df;--faint:#7f8b99;--green:#9bd67a;--amber:#f0b45a;--red:#d66a5f;--blue:#e6f3ff}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at top left,#101722 0,#020203 44%);color:var(--text);font-family:Inter,Arial,sans-serif}
+.app{display:grid;grid-template-columns:280px 1fr 430px;gap:18px;min-height:100vh;padding:22px}
+.rail,.main,.detail{background:rgba(8,8,8,.91);border:1px solid var(--line);border-radius:26px;box-shadow:0 24px 90px rgba(0,0,0,.55)}
+.rail{padding:22px}.main{padding:28px}.detail{padding:24px;overflow:auto}
+.logo{font-size:28px;font-weight:900;letter-spacing:-.05em;margin-bottom:24px}
+.label{color:var(--faint);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin:20px 0 8px}
+.workspace{background:linear-gradient(180deg,#111720,#090b10);border:1px solid var(--line2);border-radius:16px;padding:14px}
+.workspace strong{display:block;font-size:18px}.workspace span{color:var(--muted);font-size:13px}
+select,input,button{width:100%;border-radius:14px;padding:13px 14px;font-weight:800}
+select,input{background:var(--panel2);border:1px solid var(--line2);color:var(--text)}
+button{background:#f8fbff;border:0;color:#05070d;cursor:pointer;margin-top:12px}
+.navitem{padding:11px 12px;border-radius:12px;color:var(--muted);margin:4px 0}.navitem.active{background:rgba(34,197,94,.12);color:var(--text);border:1px solid rgba(34,197,94,.25)}
+h1{font-size:42px;line-height:.98;letter-spacing:-.06em;margin:0}.sub{color:var(--muted);line-height:1.55;max-width:760px;margin-top:12px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0}.kpi{background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:16px}.kpi strong{font-size:28px}.kpi span{display:block;color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin-top:7px}
+.box,.empty,.source{background:var(--panel2);border:1px solid var(--line);border-radius:18px;padding:16px}.box h3,.source h3{margin:0 0 8px}.muted{color:var(--muted);line-height:1.55}.faint{color:var(--faint)}
+.eyebrow{color:var(--blue);font-weight:900;text-transform:uppercase;letter-spacing:.14em;font-size:11px}
+.feedtitle{display:flex;justify-content:space-between;align-items:center;margin-top:24px}.feedtitle h2{margin:0;font-size:20px}
+.statuskey{display:flex;gap:12px;color:var(--muted);font-size:12px}.key{display:flex;gap:6px;align-items:center}.dot{width:10px;height:10px;border-radius:50%;display:inline-block}.green{background:var(--green)}.amber{background:var(--amber)}.red{background:var(--red)}.off{background:var(--faint)}
+.empty{border-style:dashed;text-align:center;padding:34px 22px}.empty strong{display:block;font-size:20px;margin-bottom:8px}
+.source{margin:10px 0;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}.badge{border:1px solid var(--line2);border-radius:999px;color:var(--muted);font-size:12px;padding:7px 10px;white-space:nowrap}.badge.active{color:var(--green);border-color:rgba(34,197,94,.4)}.badge.error{color:var(--red);border-color:rgba(239,68,68,.4)}
+.opp{display:grid;grid-template-columns:48px 1fr 94px;gap:14px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-left-width:4px;border-radius:18px;padding:15px;margin:12px 0;cursor:pointer}.opp:hover{border-color:var(--line2);transform:translateY(-1px)}.opp.selected{box-shadow:0 0 0 1px rgba(34,197,94,.35),0 22px 80px #0005}.opp.green{border-left-color:var(--green)}.opp.amber{border-left-color:var(--amber)}.opp.red{border-left-color:var(--red)}
+.score{font-size:25px;font-weight:900}.oppname{font-weight:900;font-size:17px}.reason{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.35}.pill{font-size:12px;border:1px solid var(--line2);border-radius:999px;color:var(--muted);padding:8px 10px;text-align:center}
+.detail h2{font-size:28px;letter-spacing:-.04em;margin:8px 0 10px}.signal{display:flex;gap:11px;padding:12px 0;border-bottom:1px solid var(--line)}.signal:last-child{border-bottom:0}.signal b{display:block}.signal span{color:var(--muted);font-size:13px;line-height:1.45}.bigaction{border:1px solid rgba(34,197,94,.35);background:rgba(34,197,94,.08)}
+@media(max-width:1180px){.app{grid-template-columns:1fr}.kpis{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="rail">
+<div class="logo">HossAgent</div>
+<div class="label">Workspace</div><div class="workspace"><strong>Scale AI</strong><span>Strategic Opportunity Intelligence</span></div>
+<div class="label">Business Unit</div><select id="businessUnit"><option>Public Sector</option><option>Commercial Enterprise</option></select>
+<div class="label">Market Lens</div><input id="market" value="Federal AI Model Assurance">
+<button onclick="runScan()">Run Buyer Scan</button>
+<div class="label">Market Views</div><div class="navitem active">Federal AI</div><div class="navitem">Defense</div><div class="navitem">Civilian</div><div class="navitem">Risk</div>
+</aside>
+<main class="main">
+<h1>Strategic opportunity intelligence.</h1>
+<p class="sub">HossAgent scans public-sector data, identifies accounts with relevant buying signals, and explains the evidence behind each recommendation.</p>
+<section class="kpis"><div class="kpi"><strong id="kpiOpps">0</strong><span>Signals Found</span></div><div class="kpi"><strong id="kpiSources">0/5</strong><span>Active Sources</span></div><div class="kpi"><strong id="kpiTop">—</strong><span>Top Account Score</span></div><div class="kpi"><strong id="kpiMode">Empty</strong><span>Status</span></div></section>
+<div class="box"><div class="eyebrow">Scan Summary</div><h3 id="scanMessage">Ready</h3><p class="muted">Public Sector source: USAspending award history. Signals indicate relevant account activity, not confirmed active solicitations.</p><p class="muted"><b>Scoring:</b> Evidence-based account scoring.</p><p id="filterStats" class="muted"></p></div>
+<div class="feedtitle"><h2>Recommended Accounts</h2><div class="statuskey"><div class="key"><span class="dot green"></span>High</div><div class="key"><span class="dot amber"></span>Medium</div><div class="key"><span class="dot red"></span>Watch</div></div></div>
+<div id="opportunities" class="empty"><strong>No buyer signals yet</strong><p class="muted">Run active scan.</p></div>
+<div class="feedtitle"><h2>Data Sources</h2></div><div id="sources"></div>
+</main>
+<aside class="detail">
+<div class="eyebrow">Account Detail</div><h2 id="detailTitle">Select an account</h2><p id="detailWhy" class="muted">Run a scan and select an opportunity to see evidence, reasoning, and recommended GTM action.</p>
+<div class="box"><h3>Opportunity Profile</h3><p class="muted"><b>Motion:</b> <span id="detailMotion">—</span></p><p class="muted"><b>Detected relevant spend:</b> <span id="detailDeal">—</span></p><p class="muted"><b>Evidence window:</b> <span id="detailWindow">—</span></p><p class="muted"><b>Status:</b> <span id="detailStatus">—</span></p></div>
+<div class="box"><h3>Evidence Trace</h3><div id="detailSignals" class="empty">No evidence loaded.</div></div>
+<div class="box bigaction"><h3>Recommended Action</h3><p id="detailAction" class="muted">No action generated yet.</p></div>
+</aside>
+</div>
+<script>
+let current=[];
+async function runScan(){
+ const business_unit=document.getElementById("businessUnit").value;
+ const market=document.getElementById("market").value;
+ document.getElementById("scanMessage").textContent="Fetching active USAspending data...";
+ const res=await fetch("/api/market-scan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:"Scale AI",business_unit,market})});
+ const data=await res.json();
+ current=data.opportunities || [];
+ document.getElementById("scanMessage").textContent=data.message;
+ const fs=data.filter_stats;
+ document.getElementById("filterStats").textContent=fs ? `Filter: ${fs.records_retained} retained / ${fs.records_fetched} fetched · ${fs.records_excluded} weak matches excluded · ${fs.records_excluded_old || 0} old records excluded · cutoff ${fs.cutoff_date} · Rule: ${fs.filter_rule}` : "";
+ document.getElementById("kpiOpps").textContent=current.length;
+ document.getElementById("kpiSources").textContent=(data.source_status||[]).filter(s=>s.status==="active").length + "/" + (data.source_status||[]).length;
+ document.getElementById("kpiTop").textContent=current.length ? Math.max(...current.map(o=>o.score)) : "—";
+ document.getElementById("kpiMode").textContent=data.status;
+ document.getElementById("sources").innerHTML=(data.source_status||[]).map(s=>`<div class="source"><div><h3>${s.name}</h3><p class="muted">${s.job}</p></div><div class="badge ${s.status}">${s.status}</div></div>`).join("");
+ if(!current.length){
+   document.getElementById("opportunities").innerHTML=`<strong>No ranked opportunities returned</strong><p class="muted">${data.message}</p>`;
+   return;
+ }
+ document.getElementById("opportunities").innerHTML=current.map((o,i)=>`<div class="opp ${o.status}" onclick="selectOpp(${i})" id="opp-${i}"><div class="score">${o.score}</div><div><div class="oppname">${o.account}</div><div class="reason">${o.why}</div></div><div class="pill">${o.status_label}</div></div>`).join("");
+ selectOpp(0);
+}
+function selectOpp(i){
+ const o=current[i]; if(!o)return;
+ document.querySelectorAll(".opp").forEach(x=>x.classList.remove("selected"));
+ document.getElementById("opp-"+i).classList.add("selected");
+ document.getElementById("detailTitle").textContent=o.account;
+ document.getElementById("detailWhy").textContent=o.why;
+ document.getElementById("detailMotion").textContent=o.motion || "—";
+ document.getElementById("detailDeal").textContent=o.detected_spend || "—";
+ document.getElementById("detailWindow").textContent=o.window;
+ document.getElementById("detailStatus").textContent=o.status_label;
+ document.getElementById("detailAction").textContent=o.recommended_action;
+ document.getElementById("detailSignals").innerHTML=o.evidence.map(s=>`<div class="signal"><span class="dot ${s.status}"></span><div><b>${s.source}</b><span>${s.detail}</span></div></div>`).join("");
+}
+</script>
+</body>
+</html>"""

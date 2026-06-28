@@ -1,374 +1,71 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>HossAgent - Dashboard</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <style>
-        :root {{
-            --bg-primary: #0a0a0a;
-            --bg-secondary: #111111;
-            --bg-tertiary: #1a1a1a;
-            --border-subtle: #1f1f1f;
-            --border-medium: #2a2a2a;
-            --text-primary: #ffffff;
-            --text-secondary: #a0a0a0;
-            --text-tertiary: #666666;
-            --accent-green: #22c55e;
-            --accent-green-dim: rgba(34, 197, 94, 0.15);
-            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
-        }}
-        
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }}
-        
-        body {{
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            font-family: var(--font-sans);
-            padding: 2rem;
-            min-height: 100vh;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }}
-        
-        .container {{
-            max-width: 1200px;
-            margin: 0 auto;
-        }}
-        
-        .header {{
-            text-align: center;
-            margin-bottom: 3rem;
-            padding-bottom: 2rem;
-            border-bottom: 1px solid var(--border-subtle);
-        }}
-        
-        h1 {{
-            font-size: 2rem;
-            font-weight: 500;
-            letter-spacing: -0.02em;
-            margin-bottom: 0.5rem;
-        }}
-        
-        .tagline {{
-            font-size: 1.1rem;
-            color: var(--text-secondary);
-            font-weight: 300;
-        }}
-        
-        .nav {{
-            text-align: center;
-            margin-top: 1.5rem;
-            display: flex;
-            justify-content: center;
-            gap: 2rem;
-        }}
-        
-        .nav a {{
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.9rem;
-            transition: color 0.2s ease;
-        }}
-        
-        .nav a:hover {{
-            color: var(--text-primary);
-        }}
-        
-        .metrics {{
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 1.5rem;
-            margin: 2.5rem 0;
-        }}
-        
-        @media (max-width: 1024px) {{
-            .metrics {{
-                grid-template-columns: repeat(2, 1fr);
-            }}
-        }}
-        
-        @media (max-width: 640px) {{
-            .metrics {{
-                grid-template-columns: 1fr;
-            }}
-        }}
-        
-        .metric-card {{
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 1.5rem;
-            text-align: center;
-            transition: all 0.2s ease;
-        }}
-        
-        .metric-card:hover {{
-            border-color: var(--border-medium);
-            transform: translateY(-2px);
-        }}
-        
-        .metric-value {{
-            font-size: 2.25rem;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-            letter-spacing: -0.02em;
-        }}
-        
-        .metric-label {{
-            font-family: var(--font-mono);
-            font-size: 0.75rem;
-            color: var(--text-tertiary);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }}
-        
-        .section {{
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin: 2rem 0;
-        }}
-        
-        .section h2 {{
-            font-family: var(--font-mono);
-            font-size: 0.75rem;
-            font-weight: 500;
-            margin-bottom: 1.5rem;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border-subtle);
-        }}
-        
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9rem;
-        }}
-        
-        table th {{
-            text-align: left;
-            padding: 0.75rem 1rem;
-            color: var(--text-tertiary);
-            font-family: var(--font-mono);
-            font-size: 0.75rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            border-bottom: 1px solid var(--border-subtle);
-        }}
-        
-        table td {{
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid var(--border-subtle);
-        }}
-        
-        table a {{
-            color: var(--text-secondary);
-            text-decoration: none;
-            transition: color 0.2s ease;
-        }}
-        
-        table a:hover {{
-            color: var(--text-primary);
-        }}
-        
-        table tr:hover {{
-            background: var(--bg-tertiary);
-        }}
-        
-        .status-badge {{
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            background: var(--bg-tertiary);
-            border-radius: 100px;
-            font-size: 0.7rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }}
-        
-        .status-badge.pending {{
-            background: rgba(249, 115, 22, 0.15);
-            color: #f97316;
-        }}
-        
-        .status-badge.done {{
-            background: var(--accent-green-dim);
-            color: var(--accent-green);
-        }}
-        
-        .status-badge.active {{
-            background: rgba(59, 130, 246, 0.15);
-            color: #3b82f6;
-        }}
-        
-        .status-badge.draft {{
-            background: rgba(249, 115, 22, 0.15);
-            color: #f97316;
-        }}
-        
-        .status-badge.paid {{
-            background: var(--accent-green-dim);
-            color: var(--accent-green);
-        }}
-        
-        .money {{
-            font-weight: 500;
-            color: var(--accent-green);
-        }}
-        
-        .admin-link {{
-            position: fixed;
-            bottom: 2rem;
-            right: 2rem;
-            background: var(--text-primary);
-            color: var(--bg-primary);
-            padding: 0.75rem 1.5rem;
-            text-decoration: none;
-            font-size: 0.8rem;
-            font-weight: 500;
-            border-radius: 8px;
-            transition: all 0.2s ease;
-        }}
-        
-        .admin-link:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(255, 255, 255, 0.12);
-        }}
-        
-        .empty {{
-            color: var(--text-tertiary);
-            font-style: italic;
-        }}
-        
-        .footer-note {{
-            margin-top: 3rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid var(--border-subtle);
-            color: var(--text-tertiary);
-            font-size: 0.85rem;
-        }}
-        
-        .footer-note p {{
-            line-height: 1.6;
-        }}
-        
-        .footer-note a {{
-            color: var(--text-secondary);
-            text-decoration: none;
-            transition: color 0.2s ease;
-        }}
-        
-        .footer-note a:hover {{
-            color: var(--text-primary);
-        }}
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HossAgent — Strategic Opportunity Intelligence</title>
+  <style>
+    body{margin:0;background:#070b12;color:#f8fafc;font-family:Inter,Arial,sans-serif}
+    .wrap{max-width:1180px;margin:0 auto;padding:40px 24px}
+    .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:36px}
+    .brand{font-size:28px;font-weight:800;letter-spacing:-.04em}
+    .pill{border:1px solid #1e293b;background:#0f172a;border-radius:999px;padding:10px 14px;color:#94a3b8;font-size:13px}
+    h1{font-size:52px;line-height:.95;letter-spacing:-.06em;margin:0 0 14px}
+    .sub{color:#94a3b8;font-size:18px;line-height:1.6;max-width:760px}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:32px 0}
+    .card{background:#0f172a;border:1px solid #1e293b;border-radius:22px;padding:22px}
+    .metric{font-size:34px;font-weight:800;letter-spacing:-.04em}
+    .label{color:#94a3b8;font-size:13px;text-transform:uppercase;letter-spacing:.08em;margin-top:8px}
+    .main{display:grid;grid-template-columns:1.15fr .85fr;gap:18px}
+    h2,h3{margin-top:0}
+    .blue{color:#38bdf8}
+    .green{color:#22c55e}
+    .muted{color:#94a3b8}
+    .signal{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid #1e293b}
+    .dot{width:9px;height:9px;background:#22c55e;border-radius:50%;margin-top:7px;box-shadow:0 0 18px #22c55e}
+    .action{background:#111827;border:1px solid #334155;border-radius:18px;padding:18px;margin-top:14px}
+    .footer{margin-top:22px;color:#64748b;font-size:13px}
+    @media(max-width:900px){.grid,.main{grid-template-columns:1fr}.top{align-items:flex-start;gap:16px;flex-direction:column}}
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>HossAgent</h1>
-            <p class="tagline">Autonomous opportunity detection for real-world business</p>
-            <div class="nav">
-                <a href="/">Dashboard</a>
-                <a href="/admin">Admin Console</a>
-            </div>
-        </div>
-
-        <div class="metrics">
-            <div class="metric-card">
-                <div class="metric-value money">{total_revenue}</div>
-                <div class="metric-label">Total Revenue</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value money">{outstanding}</div>
-                <div class="metric-label">Outstanding</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value">{completed_tasks}</div>
-                <div class="metric-label">Completed Tasks</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value">{total_leads}</div>
-                <div class="metric-label">Active Leads</div>
-            </div>
-        </div>
-
-        <div class="section">
-            <h2>Recent Work Completed</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Task</th>
-                        <th>Status</th>
-                        <th style="text-align: right;">Profit</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {tasks_rows}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="section">
-            <h2>Invoices &amp; Billing</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Invoice ID</th>
-                        <th>Customer</th>
-                        <th>Amount</th>
-                        <th>Status</th>
-                        <th style="text-align: right;">Date</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {invoices_rows}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="section">
-            <h2>Leads Pipeline</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Company</th>
-                        <th>Industry</th>
-                        <th>Status</th>
-                        <th style="text-align: right;">Last Contacted</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {leads_rows}
-                </tbody>
-            </table>
-        </div>
-
-        <div class="footer-note">
-            <p>System operates autonomously. New leads are generated, converted to customers, tasks executed, and invoices created automatically.</p>
-            <p style="margin-top: 0.5rem;">For operator controls, visit <a href="/admin">Admin Console</a>.</p>
-        </div>
+  <div class="wrap">
+    <div class="top">
+      <div class="brand">HossAgent</div>
+      <div class="pill">Strategic Opportunity Intelligence · Executive Demo Surface</div>
     </div>
 
-    <a href="/admin" class="admin-link">Admin Console</a>
+    <h1>Find the buying window before the market does.</h1>
+    <p class="sub">HossAgent monitors public signals, synthesizes evidence, scores enterprise opportunities, and recommends GTM actions for AI companies selling into complex public-sector and mid-market accounts.</p>
 
-    <script>
-        // Auto-refresh every 30 seconds
-        setInterval(() => window.location.reload(), 30000);
-    </script>
+    <section class="grid">
+      <div class="card"><div class="metric">97</div><div class="label">Top Opportunity Score</div></div>
+      <div class="card"><div class="metric">14</div><div class="label">Buying Signals</div></div>
+      <div class="card"><div class="metric">$28M</div><div class="label">Estimated Expansion</div></div>
+      <div class="card"><div class="metric">High</div><div class="label">Confidence</div></div>
+    </section>
+
+    <section class="main">
+      <div class="card">
+        <p class="blue">PRIORITY ACCOUNT</p>
+        <h2>Scale AI — Public Sector</h2>
+        <p class="muted">Converging evidence suggests an active federal AI evaluation and model assurance buying cycle. Hiring, procurement language, partner motion, and public-sector positioning indicate a near-term opportunity window.</p>
+
+        <div class="action">
+          <h3 class="green">Recommended GTM Action</h3>
+          <p class="muted">Prioritize executive outreach to Public Sector leadership. Lead with evaluation infrastructure, model assurance, red-team readiness, and operational test support. Attach a concise evidence brief and recommended account narrative.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Live Signal Feed</h3>
+        <div class="signal"><div class="dot"></div><div><b>Federal AI evaluation demand</b><br><span class="muted">Public-sector language is increasing across procurement and policy channels.</span></div></div>
+        <div class="signal"><div class="dot"></div><div><b>Hiring velocity spike</b><br><span class="muted">Roles indicate investment in evaluation, security, and delivery capacity.</span></div></div>
+        <div class="signal"><div class="dot"></div><div><b>Partner ecosystem movement</b><br><span class="muted">Adjacent vendors are repositioning around AI assurance and T&E.</span></div></div>
+        <div class="signal"><div class="dot"></div><div><b>90-day buying window</b><br><span class="muted">Signal convergence suggests action before budget lock.</span></div></div>
+      </div>
+    </section>
+
+    <p class="footer">Evidence sources modeled: SAM.gov, USAspending, SEC filings, company careers, press releases, executive movement, and defense AI market signals.</p>
+  </div>
 </body>
 </html>

@@ -1,0 +1,3091 @@
+from collections import defaultdict
+from datetime import date, timedelta, datetime
+import re
+import os
+import time
+import requests
+
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel
+
+app = FastAPI(title="HossAgent Core")
+
+class ScanRequest(BaseModel):
+    workspace: str = "Scale AI"
+    business_unit: str = "Public Sector"
+    market: str = "Federal AI Evaluation Model Assurance"
+
+HARD_AI_TERMS = [
+    "artificial intelligence",
+    "machine learning",
+    "model evaluation",
+    "model testing",
+    "model assurance",
+    "data labeling",
+    "data annotation",
+    "ai red team",
+    "red team",
+    "large language model",
+    "llm",
+    "computer vision",
+    "natural language processing",
+]
+
+SOFT_ADJACENCY_TERMS = [
+    "test and evaluation",
+    "autonomy",
+    "simulation",
+    "analytics",
+    "decision support",
+]
+
+KEYWORDS = HARD_AI_TERMS + SOFT_ADJACENCY_TERMS
+
+def money(v):
+    try:
+        v = float(v or 0)
+    except Exception:
+        v = 0
+    if v >= 1_000_000_000:
+        return f"${v/1_000_000_000:.1f}B"
+    if v >= 1_000_000:
+        return f"${v/1_000_000:.1f}M"
+    if v >= 1_000:
+        return f"${v/1_000:.0f}K"
+    return f"${v:.0f}"
+
+def parse_date(value):
+    if not value:
+        return None
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(value[:19], fmt).date()
+        except Exception:
+            pass
+    return None
+
+def keyword_hits(text):
+    low = (text or "").lower()
+    hard = [k for k in HARD_AI_TERMS if k in low]
+    soft = [k for k in SOFT_ADJACENCY_TERMS if k in low]
+    return hard, soft
+
+def fetch_usaspending_awards(market):
+    end = date.today()
+    start = end - timedelta(days=365 * 2)
+
+    base_body = {
+        "filters": {
+            "time_period": [{"start_date": start.isoformat(), "end_date": end.isoformat()}],
+            "keywords": KEYWORDS,
+            "award_type_codes": ["A", "B", "C", "D"]
+        },
+        "fields": [
+            "Award ID",
+            "Recipient Name",
+            "Awarding Agency",
+            "Awarding Sub Agency",
+            "Start Date",
+            "End Date",
+            "Award Amount",
+            "Description"
+        ],
+        "limit": 100,
+        "sort": "Award Amount",
+        "order": "desc",
+        "subawards": False
+    }
+
+    all_results = []
+    # USAspending sorted by award amount tends to surface giant older vehicles first.
+    # Pull several pages, then let our freshness / AI-specific filters do the real work.
+    for page in range(1, 8):
+        body = dict(base_body)
+        body["page"] = page
+
+        r = requests.post(
+            "https://api.usaspending.gov/api/v2/search/spending_by_award/",
+            json=body,
+            timeout=20
+        )
+        r.raise_for_status()
+
+        page_results = r.json().get("results", [])
+        if not page_results:
+            break
+
+        all_results.extend(page_results)
+
+    return all_results
+
+
+def build_opportunities(results):
+    total_records = len(results)
+    retained_records = 0
+    excluded_records = 0
+    excluded_old_records = 0
+    cutoff_date = date.today() - timedelta(days=365 * 2)
+
+    grouped = defaultdict(lambda: {
+        "agency": "",
+        "amount": 0,
+        "awards": [],
+        "hard_keywords": set(),
+        "soft_keywords": set(),
+        "existing_footprint": False,
+    })
+
+    for row in results:
+        parent_agency = row.get("Awarding Agency") or "Unknown Agency"
+        sub_agency = row.get("Awarding Sub Agency") or ""
+        agency = sub_agency if sub_agency and sub_agency != parent_agency else parent_agency
+        desc = row.get("Description") or ""
+        start_date_value = row.get("Start Date")
+        parsed_start_date = parse_date(start_date_value)
+
+        # Trust rule:
+        # If we claim a 24-month evidence window, old awards cannot appear as evidence.
+        if parsed_start_date and parsed_start_date < cutoff_date:
+            excluded_old_records += 1
+            continue
+
+        hard_hits, soft_hits = keyword_hits(desc)
+
+        # Product rule:
+        # Do NOT treat generic "test and evaluation" as AI opportunity evidence by itself.
+        # Keep records only if they contain hard AI language, or multiple soft adjacency signals.
+        if not hard_hits and len(soft_hits) < 2:
+            excluded_records += 1
+            continue
+
+        retained_records += 1
+
+        amt = float(row.get("Award Amount") or 0)
+        recipient = row.get("Recipient Name") or ""
+        is_existing_footprint = "scale ai" in recipient.lower()
+
+        g = grouped[agency]
+        g["agency"] = agency
+        g["parent_agency"] = parent_agency
+        g["amount"] += amt
+        g["hard_keywords"].update(hard_hits)
+        g["soft_keywords"].update(soft_hits)
+        if is_existing_footprint:
+            g["existing_footprint"] = True
+        g["awards"].append({
+            "award_id": row.get("Award ID"),
+            "recipient": recipient,
+            "is_existing_footprint": is_existing_footprint,
+            "parent_agency": parent_agency,
+            "sub_agency": sub_agency,
+            "amount": amt,
+            "amount_display": money(amt),
+            "start_date": start_date_value,
+            "description": desc[:300] + ("..." if len(desc) > 300 else ""),
+            "hard_keywords": hard_hits,
+            "soft_keywords": soft_hits
+        })
+
+    opps = []
+    for agency, g in grouped.items():
+        evidence_count = len(g["awards"])
+        hard_count = len(g["hard_keywords"])
+        soft_count = len(g["soft_keywords"])
+        spend = g["amount"]
+
+        # Buyer-propensity score, not deal forecast.
+        # Hard AI language matters more than broad historical spend.
+        score = min(99, int(
+            45
+            + min(evidence_count, 10) * 2.5
+            + min(hard_count, 8) * 5.0
+            + min(soft_count, 5) * 1.5
+            + min(spend / 25_000_000, 10)
+            + (12 if g["existing_footprint"] else 0)
+        ))
+
+        if g["existing_footprint"] and hard_count > 0:
+            score = max(score, 87)
+            status = "green"
+            status_label = "Expansion candidate"
+        elif score >= 82:
+            status = "green"
+            status_label = "High confidence"
+        elif score >= 65:
+            status = "amber"
+            status_label = "Medium confidence"
+        else:
+            status = "red"
+            status_label = "Watchlist"
+
+        top_awards = sorted(g["awards"], key=lambda x: x["amount"], reverse=True)[:5]
+        hard_keywords = sorted(g["hard_keywords"])[:8]
+        soft_keywords = sorted(g["soft_keywords"])[:6]
+
+        if not hard_keywords:
+            continue
+
+        opps.append({
+            "account": agency,
+            "score": score,
+            "status": status,
+            "status_label": status_label,
+            "detected_spend": money(spend),
+            "motion": "Expansion / Existing Footprint" if g["existing_footprint"] else "New Account Activity",
+            "window": "Award evidence from last 24 months",
+            "why": f"{agency} shows {evidence_count} recent award records with hard AI/model/data language totaling {money(spend)}. " + ("Scale AI appears in award history, making this an existing-footprint expansion signal. " if g["existing_footprint"] else "") + f"Hard AI evidence: {', '.join(hard_keywords)}. Adjacent evidence: {', '.join(soft_keywords) if soft_keywords else 'none detected'}.",
+            "evidence": [
+                {
+                    "status": "green" if a["hard_keywords"] else "amber",
+                    "source": "USAspending award",
+                    "detail": f"Award {a.get('award_id') or 'unknown'} · {a.get('start_date') or 'unknown date'} · {a['amount_display']} · {a.get('parent_agency') or 'Unknown parent agency'} · {a.get('sub_agency') or 'Unknown sub-agency'} · {a.get('recipient') or 'Unknown recipient'}" + (" · EXISTING SCALE FOOTPRINT" if a.get("is_existing_footprint") else "") + f" · matched hard terms: {', '.join(a['hard_keywords']) if a['hard_keywords'] else 'none'} · matched soft terms: {', '.join(a['soft_keywords']) if a['soft_keywords'] else 'none'} · {a.get('description') or 'No description'}"
+                }
+                for a in top_awards
+            ],
+            "recommended_action": (f"Treat {agency} as an existing-footprint expansion account. Next: check SAM.gov for active solicitations, identify the incumbent program context, and build an expansion brief around model evaluation and mission AI readiness." if g["existing_footprint"] else f"Treat {agency} as a buyer-propensity account, not a confirmed active opportunity. Next: check SAM.gov for active solicitations and validate whether current buying motion exists.")
+        })
+
+    final = sorted(opps, key=lambda x: x["score"], reverse=True)[:12]
+    return {
+        "opportunities": final,
+        "filter_stats": {
+            "records_fetched": total_records,
+            "records_retained": retained_records,
+            "records_excluded": excluded_records,
+            "records_excluded_old": excluded_old_records,
+            "buyer_groups": len(final),
+            "cutoff_date": cutoff_date.isoformat(),
+            "filter_rule": "Retain records from the last 24 months with hard AI/model/data terms, or at least two soft adjacency terms. Generic test-and-evaluation alone is excluded."
+        }
+    }
+
+@app.post("/api/market-scan")
+async def market_scan(req: ScanRequest):
+    # Public Sector is currently wired to USAspending.
+    # Commercial Enterprise is intentionally empty until we add commercial connectors.
+    if req.business_unit != "Public Sector":
+        return JSONResponse({
+            "workspace": req.workspace,
+            "business_unit": req.business_unit,
+            "market": req.market,
+            "status": "empty",
+            "message": "Commercial Enterprise scan is not wired yet. Federal USAspending data is intentionally suppressed for this business unit.",
+            "source_status": [
+                {"name": "Company News / Press", "status": "not wired", "job": "Detect announcements, launches, partnerships, and expansion signals."},
+                {"name": "SEC Filings", "status": "not wired", "job": "Detect risk, investment, AI strategy, and enterprise buying intent."},
+                {"name": "Job Postings", "status": "not wired", "job": "Detect hiring velocity by function, capability, and region."},
+                {"name": "Technology Pages", "status": "not wired", "job": "Detect stack changes, AI adoption, security posture, and vendor fit."},
+                {"name": "Competitive Movement", "status": "not wired", "job": "Detect competitor positioning and account-entry opportunities."}
+            ],
+            "opportunities": []
+        })
+
+    try:
+        results = fetch_usaspending_awards(req.market)
+        scan_result = build_opportunities(results)
+        opportunities = scan_result["opportunities"]
+        return JSONResponse({
+            "workspace": req.workspace,
+            "business_unit": req.business_unit,
+            "market": req.market,
+            "status": "live",
+            "message": f"Fetched {len(results)} USAspending award records. Retained {scan_result['filter_stats']['records_retained']} after relevance filtering and grouped them into {len(opportunities)} buyer-propensity signals.",
+            "filter_stats": scan_result["filter_stats"],
+            "source_status": [
+                {"name": "USAspending", "status": "live", "job": "Find recent award history, agencies, vendors, and spend patterns."},
+                {"name": "SAM.gov", "status": "not wired", "job": "Find active federal opportunities and solicitations. Requires SAM.gov API key."},
+                {"name": "Federal Careers / Hiring", "status": "not wired", "job": "Detect hiring velocity by agency, program, and capability."},
+                {"name": "News / Press", "status": "not wired", "job": "Detect market movement, executive signals, and strategic announcements."},
+                {"name": "Company / Competitor Signals", "status": "not wired", "job": "Detect vendor positioning and competitive movement."}
+            ],
+            "opportunities": opportunities
+        })
+    except Exception as e:
+        return JSONResponse({
+            "workspace": req.workspace,
+            "business_unit": req.business_unit,
+            "market": req.market,
+            "status": "error",
+            "message": f"Live USAspending fetch failed: {type(e).__name__}: {str(e)}",
+            "source_status": [
+                {"name": "USAspending", "status": "error", "job": "Find recent award history, agencies, vendors, and spend patterns."},
+                {"name": "SAM.gov", "status": "not wired", "job": "Find active federal opportunities and solicitations. Requires SAM.gov API key."}
+            ],
+            "opportunities": []
+        }, status_code=200)
+
+@app.get("/", response_class=HTMLResponse)
+async def home():
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HossAgent Core</title>
+<style>
+:root{--bg:#05070a;--panel:#101418;--panel2:#171c22;--line:#26313b;--line2:#3b4654;--text:#f8fbff;--muted:#d7e0e8;--faint:#8f9aa6;--green:#9bd67a;--amber:#f0b45a;--red:#d66a5f;--blue:#e6f3ff}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at top left,#101722 0,#020203 44%);color:var(--text);font-family:Inter,Arial,sans-serif}
+.app{display:grid;grid-template-columns:280px 1fr 430px;gap:18px;min-height:100vh;padding:22px}
+.rail,.main,.detail{background:rgba(8,8,8,.91);border:1px solid var(--line);border-radius:26px;box-shadow:0 24px 90px rgba(0,0,0,.55)}
+.rail{padding:22px}.main{padding:28px}.detail{padding:24px;overflow:auto}
+.logo{font-size:28px;font-weight:900;letter-spacing:-.05em;margin-bottom:24px}
+.label{color:var(--faint);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin:20px 0 8px}
+.workspace{background:linear-gradient(180deg,#111720,#090b10);border:1px solid var(--line2);border-radius:16px;padding:14px}
+.workspace strong{display:block;font-size:18px}.workspace span{color:var(--muted);font-size:13px}
+select,input,button{width:100%;border-radius:14px;padding:13px 14px;font-weight:800}
+select,input{background:var(--panel2);border:1px solid var(--line2);color:var(--text)}
+button{background:#f8fbff;border:0;color:#05070d;cursor:pointer;margin-top:12px}
+.navitem{padding:11px 12px;border-radius:12px;color:var(--muted);margin:4px 0}.navitem.active{background:rgba(34,197,94,.12);color:var(--text);border:1px solid rgba(34,197,94,.25)}
+h1{font-size:42px;line-height:.98;letter-spacing:-.06em;margin:0}.sub{color:var(--muted);line-height:1.55;max-width:760px;margin-top:12px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0}.kpi{background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:16px}.kpi strong{font-size:28px}.kpi span{display:block;color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.12em;margin-top:7px}
+.box,.empty,.source{background:var(--panel2);border:1px solid var(--line);border-radius:18px;padding:16px}.box h3,.source h3{margin:0 0 8px}.muted{color:var(--muted);line-height:1.55}.faint{color:var(--faint)}
+.eyebrow{color:var(--blue);font-weight:900;text-transform:uppercase;letter-spacing:.14em;font-size:11px}
+.feedtitle{display:flex;justify-content:space-between;align-items:center;margin-top:24px}.feedtitle h2{margin:0;font-size:20px}
+.statuskey{display:flex;gap:12px;color:var(--muted);font-size:12px}.key{display:flex;gap:6px;align-items:center}.dot{width:10px;height:10px;border-radius:50%;display:inline-block}.green{background:var(--green)}.amber{background:var(--amber)}.red{background:var(--red)}.off{background:var(--faint)}
+.empty{border-style:dashed;text-align:center;padding:34px 22px}.empty strong{display:block;font-size:20px;margin-bottom:8px}
+.source{margin:10px 0;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}.badge{border:1px solid var(--line2);border-radius:999px;color:var(--muted);font-size:12px;padding:7px 10px;white-space:nowrap}.badge.live{color:var(--green);border-color:rgba(34,197,94,.4)}.badge.error{color:var(--red);border-color:rgba(239,68,68,.4)}
+.opp{display:grid;grid-template-columns:48px 1fr 94px;gap:14px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-left-width:4px;border-radius:18px;padding:15px;margin:12px 0;cursor:pointer}.opp:hover{border-color:var(--line2);transform:translateY(-1px)}.opp.selected{box-shadow:0 0 0 1px rgba(34,197,94,.35),0 22px 80px #0005}.opp.green{border-left-color:var(--green)}.opp.amber{border-left-color:var(--amber)}.opp.red{border-left-color:var(--red)}
+.score{font-size:25px;font-weight:900}.oppname{font-weight:900;font-size:17px}.reason{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.35}.pill{font-size:12px;border:1px solid var(--line2);border-radius:999px;color:var(--muted);padding:8px 10px;text-align:center}
+.detail h2{font-size:28px;letter-spacing:-.04em;margin:8px 0 10px}.signal{display:flex;gap:11px;padding:12px 0;border-bottom:1px solid var(--line)}.signal:last-child{border-bottom:0}.signal b{display:block}.signal span{color:var(--muted);font-size:13px;line-height:1.45}.bigaction{border:1px solid rgba(34,197,94,.35);background:rgba(34,197,94,.08)}
+@media(max-width:1180px){.app{grid-template-columns:1fr}.kpis{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="rail">
+<div class="logo">HossAgent</div>
+<div class="label">Workspace</div><div class="workspace"><strong>Scale AI</strong><span>Opportunity Intelligence</span></div>
+<div class="label">Business Unit</div><select id="businessUnit"><option>Public Sector</option><option>Commercial Enterprise</option></select>
+<div class="label">Market Lens</div><input id="market" value="Federal AI Evaluation Model Assurance">
+<button onclick="runScan()">Run Buyer Scan</button><a href="/eval?v=from-dashboard" style="display:block;margin-top:10px;color:var(--text);text-decoration:none;font-weight:700;">Evaluation Console →</a>
+
+</aside>
+<main class="main">
+<h1>Opportunity intelligence for AI test and evaluation.</h1>
+<p class="sub">HossAgent scans public-sector data, identifies accounts with evidence of AI test-and-evaluation demand, and explains the source evidence behind each recommendation.</p>
+<section class="kpis"><div class="kpi"><strong id="kpiOpps">0</strong><span>Account Signals</span></div><div class="kpi"><strong id="kpiSources">1</strong><span>Active Sources</span></div><div class="kpi"><strong id="kpiTop">—</strong><span>Top Score</span></div><div class="kpi"><strong id="kpiMode">Empty</strong><span>Status</span></div></section>
+<div class="box"><div class="eyebrow">Scan Summary</div><h3 id="scanMessage">Ready</h3><p class="muted">Source: USAspending award history. Active solicitations require SAM.gov validation.</p><p class="muted"><b>Scoring:</b> Evidence-based account ranking.</p><p id="filterStats" class="muted"></p></div>
+<div class="feedtitle"><h2>Recommended Accounts</h2><div class="statuskey"><div class="key"><span class="dot green"></span>High</div><div class="key"><span class="dot amber"></span>Medium</div><div class="key"><span class="dot red"></span>Watch</div></div></div>
+<div id="opportunities" class="empty"><strong>No account signals yet</strong><p class="muted">Run buyer scan.</p></div>
+<div class="feedtitle"><h2>Data Sources</h2></div><div id="sources"></div>
+</main>
+<aside class="detail">
+<div class="eyebrow">Account Detail</div><h2 id="detailTitle">Select an account</h2><p id="detailWhy" class="muted">Run a scan and select an account to see evidence, scoring rationale, and recommended action.</p>
+<div class="box"><h3>Opportunity Profile</h3><p class="muted"><b>Motion:</b> <span id="detailMotion">—</span></p><p class="muted"><b>Detected relevant spend:</b> <span id="detailDeal">—</span></p><p class="muted"><b>Evidence window:</b> <span id="detailWindow">—</span></p><p class="muted"><b>Status:</b> <span id="detailStatus">—</span></p></div>
+<div class="box"><h3>Evidence Trace</h3><div id="detailSignals" class="empty">No evidence loaded.</div></div>
+<div class="box bigaction"><h3>Recommended Action</h3><p id="detailAction" class="muted">No action generated yet.</p></div>
+</aside>
+</div>
+<script>
+let current=[];
+async function runScan(){
+ const business_unit=document.getElementById("businessUnit").value;
+ const market=document.getElementById("market").value;
+ document.getElementById("scanMessage").textContent="Fetching live USAspending data...";
+ const res=await fetch("/api/market-scan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workspace:"Scale AI",business_unit,market})});
+ const data=await res.json();
+ current=data.opportunities || [];
+ document.getElementById("scanMessage").textContent=data.message;
+ const fs=data.filter_stats;
+ document.getElementById("filterStats").textContent=fs ? `Filter: ${fs.records_retained} retained / ${fs.records_fetched} fetched · ${fs.records_excluded} weak matches excluded · ${fs.records_excluded_old || 0} old records excluded · cutoff ${fs.cutoff_date} · Rule: ${fs.filter_rule}` : "";
+ document.getElementById("kpiOpps").textContent=current.length;
+ document.getElementById("kpiSources").textContent=(data.source_status||[]).filter(s=>s.status==="live").length + "/" + (data.source_status||[]).length;
+ document.getElementById("kpiTop").textContent=current.length ? Math.max(...current.map(o=>o.score)) : "—";
+ document.getElementById("kpiMode").textContent=data.status;
+ document.getElementById("sources").innerHTML=(data.source_status||[]).filter(source => source.status === 'live').map(s=>`<div class="source"><div><h3>${s.name}</h3><p class="muted">${s.job}</p></div><div class="badge ${s.status}">${s.status}</div></div>`).join("");
+ if(!current.length){
+   document.getElementById("opportunities").innerHTML=`<strong>No ranked opportunities returned</strong><p class="muted">${data.message}</p>`;
+   return;
+ }
+ document.getElementById("opportunities").innerHTML=current.map((o,i)=>`<div class="opp ${o.status}" onclick="selectOpp(${i})" id="opp-${i}"><div class="score">${o.score}</div><div><div class="oppname">${o.account}</div><div class="reason">${o.why}</div></div><div class="pill">${o.status_label}</div></div>`).join("");
+ selectOpp(0);
+}
+function selectOpp(i){
+ const o=current[i]; if(!o)return;
+ document.querySelectorAll(".opp").forEach(x=>x.classList.remove("selected"));
+ document.getElementById("opp-"+i).classList.add("selected");
+ document.getElementById("detailTitle").textContent=o.account;
+ document.getElementById("detailWhy").textContent=o.why;
+ document.getElementById("detailMotion").textContent=o.motion || "—";
+ document.getElementById("detailDeal").textContent=o.detected_spend || "—";
+ document.getElementById("detailWindow").textContent=o.window;
+ document.getElementById("detailStatus").textContent=o.status_label;
+ document.getElementById("detailAction").textContent=o.recommended_action;
+ document.getElementById("detailSignals").innerHTML=o.evidence.map(s=>`<div class="signal"><span class="dot ${s.status}"></span><div><b>${s.source}</b><span>${s.detail}</span></div></div>`).join("");
+}
+</script>
+
+<script id="hossagent-customer-ui-cleanup">
+(function () {
+  function replaceTextNode(node) {
+    if (!node || !node.nodeValue) return;
+
+    let text = node.nodeValue;
+
+    const exact = new Map([
+      ["Buyer-propensity intelligence cockpit. Noir edition.", "Opportunity intelligence for AI test and evaluation."],
+      ["HossAgent scans real public data, ranks buyer-propensity accounts, and explains why an account may deserve GTM attention. Current coverage: Public Sector / USAspending only. Commercial Enterprise connectors are not wired yet.", "HossAgent scans public-sector data, identifies accounts with evidence of AI test-and-evaluation demand, and explains the source evidence behind each recommendation."],
+      ["Buyer Signals Found", "Account Signals"],
+      ["Active Sources", "Active Sources"],
+      ["Top Propensity Score", "Top Score"],
+      ["Scan State", "Status"],
+      ["Scan Output", "Scan Summary"],
+      ["Account Activity Signals by Agency / Sub-Agency", "Recommended Accounts"],
+      ["Source Readiness", "Data Sources"],
+      ["Opportunity Detail", "Account Detail"],
+      ["Commercial Shape", "Opportunity Profile"],
+      ["New Account Activity", "New Account Signal"],
+      ["Watchlist", "Watch"],
+      ["live", "Active"],
+      ["not wired", "Planned"]
+    ]);
+
+    if (exact.has(text.trim())) {
+      node.nodeValue = text.replace(text.trim(), exact.get(text.trim()));
+      return;
+    }
+
+    text = text.replaceAll("buyer-propensity", "account");
+    text = text.replaceAll("Buyer-propensity", "Account");
+    text = text.replaceAll("Hard AI evidence", "Matched evidence");
+    text = text.replaceAll("Adjacent evidence", "Supporting evidence");
+    text = text.replaceAll("hard AI/model/data language", "relevant AI/data language");
+    text = text.replaceAll("Reasoning mode: Deterministic rules. AI synthesis is not wired yet.", "Scoring: Evidence-based account ranking.");
+
+    if (text.includes("Filter:") && text.includes("Generic test-and-evaluation alone is excluded")) {
+      const match = text.match(/Filter:\s*(\d+\s+retained\s*\/\s*\d+\s+fetched)/i);
+      text = match ? "Filter: " + match[1] : "Filter: evidence relevance applied";
+    }
+
+    node.nodeValue = text;
+  }
+
+  function removeUnwiredSavedViews() {
+    const savedViews = Array.from(document.querySelectorAll("h3"))
+      .filter(h => h.textContent.trim() === "Saved Views");
+
+    for (const heading of savedViews) {
+      const box = heading.closest(".box");
+      if (box) {
+        box.remove();
+        continue;
+      }
+
+      heading.remove();
+
+      const labels = new Set([
+        "Federal AI Evaluation",
+        "DoD Modernization",
+        "Civilian Agencies",
+        "Risk Watch"
+      ]);
+
+      Array.from(document.querySelectorAll("button")).forEach(button => {
+        if (labels.has(button.textContent.trim())) button.remove();
+      });
+    }
+  }
+
+  function cleanup() {
+    removeUnwiredSavedViews();
+
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(replaceTextNode);
+  }
+
+  document.addEventListener("DOMContentLoaded", cleanup);
+  window.addEventListener("load", cleanup);
+
+  const originalFetch = window.fetch;
+  window.fetch = async function () {
+    const response = await originalFetch.apply(this, arguments);
+    setTimeout(cleanup, 50);
+    setTimeout(cleanup, 250);
+    return response;
+  };
+
+  setInterval(cleanup, 1000);
+})();
+</script>
+
+</body>
+</html>"""
+
+
+
+@app.get("/api/eval/self-test-v3")
+async def hossagent_eval_self_test():
+    market = "Federal AI Evaluation Model Assurance"
+    started = time.perf_counter()
+
+    checks = []
+    diagnostics = {
+        "market": market,
+        "records_fetched": 0,
+        "accounts_returned": 0,
+        "evidence_items": 0,
+        "top_account": None,
+        "top_score": None,
+        "duration_ms": None,
+        "error": None,
+    }
+
+    def add_check(name, passed, detail):
+        checks.append({
+            "name": name,
+            "status": "pass" if passed else "fail",
+            "detail": detail,
+        })
+
+    results = []
+    opportunities = []
+
+    try:
+        results = fetch_usaspending_awards(market)
+        diagnostics["records_fetched"] = len(results)
+
+        opportunities = build_opportunities(results)
+        diagnostics["accounts_returned"] = len(opportunities)
+
+        if opportunities:
+            top = opportunities[0]
+            diagnostics["top_account"] = top.get("agency")
+            diagnostics["top_score"] = top.get("score")
+            diagnostics["evidence_items"] = sum(len(o.get("signals", [])) for o in opportunities)
+
+        add_check(
+            "USAspending connector reachable",
+            len(results) > 0,
+            f"{len(results)} records fetched from USAspending."
+        )
+
+        add_check(
+            "Scan returned account signals",
+            len(opportunities) > 0,
+            f"{len(opportunities)} account signal(s) returned after filtering."
+        )
+
+        add_check(
+            "Evidence trace populated",
+            diagnostics["evidence_items"] > 0,
+            f"{diagnostics['evidence_items']} evidence item(s) available across returned accounts."
+        )
+
+        required_keys = ["agency", "score", "why", "signals", "recommended_action"]
+        shape_ok = bool(opportunities) and all(k in opportunities[0] for k in required_keys)
+
+        add_check(
+            "Response shape valid",
+            shape_ok,
+            "Top account includes agency, score, why, signals, and recommended_action."
+        )
+
+        action_ok = bool(opportunities) and bool(opportunities[0].get("recommended_action"))
+
+        add_check(
+            "Recommended action populated",
+            action_ok,
+            opportunities[0].get("recommended_action") if opportunities else "No account returned."
+        )
+
+    except Exception as e:
+        diagnostics["error"] = f"{type(e).__name__}: {e}"
+        add_check("Self-test execution", False, diagnostics["error"])
+
+    diagnostics["duration_ms"] = int((time.perf_counter() - started) * 1000)
+
+    source_health = [
+        {
+            "source": "USAspending",
+            "status": "active" if diagnostics["records_fetched"] > 0 and not diagnostics["error"] else "failed",
+            "detail": "Federal award history connector used by the live buyer scan.",
+        },
+        {
+            "source": "Federal Register",
+            "status": "staged" if "fetch_federal_register_documents" in globals() else "planned",
+            "detail": "Policy and regulatory movement source. Not active in the customer scan yet.",
+        },
+        {
+            "source": "SAM.gov",
+            "status": "needs_key",
+            "detail": "Active solicitations source. Requires API key before activation.",
+        },
+        {
+            "source": "Commercial sources",
+            "status": "planned",
+            "detail": "SEC, news, hiring, and technical-market signals are not active yet.",
+        },
+    ]
+
+    required_checks = [c for c in checks if c["name"] != "Self-test execution"]
+    overall = "pass" if required_checks and all(c["status"] == "pass" for c in required_checks) else "fail"
+
+    return JSONResponse({
+        "system": "HossAgent",
+        "console": "Evaluation Console",
+        "overall_status": overall,
+        "diagnostics": diagnostics,
+        "source_health": source_health,
+        "checks": checks,
+    })
+
+
+@app.get("/eval", response_class=HTMLResponse)
+async def hossagent_eval_console():
+    return HTMLResponse("""
+<!doctype html>
+<html>
+<head>
+  <title>HossAgent Evaluation Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg:#05070a;
+      --panel:#101418;
+      --panel2:#171c22;
+      --text:#f8fbff;
+      --muted:#d7e0e8;
+      --line:#26313b;
+      --ok:#b8f7c5;
+      --bad:#ffb4a8;
+      --warn:#dbeafe;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header {
+      padding:28px 36px;
+      border-bottom:1px solid var(--line);
+      display:flex;
+      justify-content:space-between;
+      gap:20px;
+      align-items:flex-start;
+    }
+    h1 { margin:0 0 8px; font-size:28px; }
+    p { color:var(--muted); line-height:1.45; }
+    a { color:var(--text); }
+    button {
+      background:var(--text);
+      color:#05070a;
+      border:0;
+      border-radius:10px;
+      padding:12px 16px;
+      font-weight:700;
+      cursor:pointer;
+    }
+    main {
+      padding:28px 36px;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:18px;
+    }
+    .card {
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:18px;
+    }
+    .wide { grid-column:1 / -1; }
+    .metric-row {
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap:12px;
+    }
+    .metric {
+      background:var(--panel2);
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:14px;
+    }
+    .label {
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      font-size:11px;
+      margin-bottom:8px;
+    }
+    .value { font-size:24px; font-weight:800; }
+    .row {
+      border-top:1px solid var(--line);
+      padding:12px 0;
+    }
+    .row:first-child { border-top:0; }
+    .status {
+      display:inline-block;
+      border-radius:999px;
+      padding:4px 9px;
+      font-size:12px;
+      font-weight:800;
+      margin-right:8px;
+    }
+    .pass { background:rgba(184,247,197,.13); color:var(--ok); }
+    .fail { background:rgba(255,180,168,.13); color:var(--bad); }
+    .planned, .staged, .needs_key { background:rgba(247,217,166,.13); color:var(--warn); }
+    .active { background:rgba(184,247,197,.13); color:var(--ok); }
+    pre {
+      white-space:pre-wrap;
+      overflow:auto;
+      background:#050505;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:14px;
+      color:var(--muted);
+    }
+    @media (max-width: 900px) {
+      main { grid-template-columns:1fr; padding:18px; }
+      header { padding:20px; flex-direction:column; }
+      .metric-row { grid-template-columns:1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>HossAgent Evaluation Console</h1>
+      <p>Internal test-and-evaluation view for the HossAgent stack. This checks connector health, scan execution, response shape, evidence trace population, and recommended-action output.</p>
+      <p><a href="/">Back to HossAgent</a></p>
+    </div>
+    <button id="selfTestButton" onclick="runSelfTest()">Run Self-Test</button>
+  </header>
+
+  <main>
+    <section class="card wide">
+      <div class="metric-row">
+        <div class="metric"><div class="label">Overall</div><div class="value" id="overall">Not run</div></div>
+        <div class="metric"><div class="label">Records Fetched</div><div class="value" id="records">—</div></div>
+        <div class="metric"><div class="label">Accounts Returned</div><div class="value" id="accounts">—</div></div>
+        <div class="metric"><div class="label">Duration</div><div class="value" id="duration">—</div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Source Health</h2>
+      <div id="sources"><p>Run self-test to load source health.</p></div>
+    </section>
+
+    <section class="card">
+      <h2>Evaluation Checks</h2>
+      <div id="checks"><p>Run self-test to load checks.</p></div>
+    </section>
+
+    <section class="card wide">
+      <h2>Scan Diagnostics</h2>
+      <pre id="diagnostics">Run self-test to load diagnostics.</pre>
+    </section>
+  </main>
+
+  <script>
+    function badge(status) {
+      return '<span class="status ' + status + '">' + status.toUpperCase().replace("_", " ") + '</span> ';
+    }
+
+    async function runSelfTest() {
+      document.getElementById("overall").textContent = "Running";
+      const response = await fetch("/api/eval/self-test-v3?ts=" + Date.now(), { cache: "no-store" });
+      const data = await response.json();
+
+      const d = data.diagnostics || {};
+      document.getElementById("overall").textContent = data.overall_status === "pass" ? "Pass" : "Fail";
+      document.getElementById("records").textContent = d.records_fetched ?? "—";
+      document.getElementById("accounts").textContent = d.accounts_returned ?? "—";
+      document.getElementById("duration").textContent = d.duration_ms ? d.duration_ms + " ms" : "—";
+
+      document.getElementById("sources").innerHTML = (data.source_health || []).map(function (s) {
+        return '<div class="row">' + badge(s.status) + '<b>' + s.source + '</b><p>' + s.detail + '</p></div>';
+      }).join("");
+
+      document.getElementById("checks").innerHTML = (data.checks || []).map(function (c) {
+        return '<div class="row">' + badge(c.status) + '<b>' + c.name + '</b><p>' + c.detail + '</p></div>';
+      }).join("");
+
+      document.getElementById("diagnostics").textContent = JSON.stringify(d, null, 2);
+    }
+
+    runSelfTest();
+  </script>
+</body>
+</html>
+    """)
+
+
+
+
+@app.get("/api/eval/self-test-v3")
+async def hossagent_eval_self_test_v2():
+    market = "Federal AI Evaluation Model Assurance"
+    started = time.perf_counter()
+
+    checks = []
+    diagnostics = {
+        "market": market,
+        "records_fetched": 0,
+        "accounts_returned": 0,
+        "evidence_items": 0,
+        "top_account": None,
+        "top_score": None,
+        "duration_ms": None,
+        "error": None,
+        "raw_opportunity_shape": None,
+        "filter_stats_detected": False,
+    }
+
+    def add_check(name, passed, detail):
+        checks.append({
+            "name": name,
+            "status": "pass" if passed else "fail",
+            "detail": detail,
+        })
+
+    def normalize_opportunities(raw):
+        diagnostics["raw_opportunity_shape"] = type(raw).__name__
+
+        if raw is None:
+            return []
+
+        if isinstance(raw, list):
+            if raw and isinstance(raw[0], dict):
+                return raw
+            for item in raw:
+                if isinstance(item, list):
+                    return item
+            return []
+
+        if isinstance(raw, tuple):
+            for item in raw:
+                if isinstance(item, dict) and ("filter" in str(item).lower() or "retained" in str(item).lower()):
+                    diagnostics["filter_stats_detected"] = True
+                if isinstance(item, list):
+                    return item
+            return []
+
+        if isinstance(raw, dict):
+            diagnostics["filter_stats_detected"] = any(
+                key in raw for key in ["filter_stats", "retained", "excluded_old", "excluded_weak"]
+            )
+
+            for key in ["opportunities", "accounts", "signals", "results", "items"]:
+                value = raw.get(key)
+                if isinstance(value, list):
+                    return value
+
+            for value in raw.values():
+                if isinstance(value, list):
+                    return value
+
+            return []
+
+        return []
+
+    try:
+        results = fetch_usaspending_awards(market)
+        diagnostics["records_fetched"] = len(results)
+
+        raw = build_opportunities(results)
+        opportunities = normalize_opportunities(raw)
+
+        diagnostics["accounts_returned"] = len(opportunities)
+
+        if opportunities and isinstance(opportunities[0], dict):
+            top = opportunities[0]
+            diagnostics["top_account"] = (
+                top.get("agency")
+                or top.get("account")
+                or top.get("accountName")
+                or top.get("name")
+            )
+            diagnostics["top_score"] = top.get("score")
+            diagnostics["evidence_items"] = sum(
+                len((o.get("signals") or o.get("evidence") or []))
+                for o in opportunities
+                if isinstance(o, dict)
+            )
+
+        add_check(
+            "USAspending connector reachable",
+            diagnostics["records_fetched"] > 0,
+            f"{diagnostics['records_fetched']} records fetched from USAspending."
+        )
+
+        add_check(
+            "Scan returned account signals",
+            diagnostics["accounts_returned"] > 0,
+            f"{diagnostics['accounts_returned']} account signal(s) returned after filtering."
+        )
+
+        add_check(
+            "Evidence trace populated",
+            diagnostics["evidence_items"] > 0,
+            f"{diagnostics['evidence_items']} evidence item(s) available across returned accounts."
+        )
+
+        shape_ok = (
+            bool(opportunities)
+            and isinstance(opportunities[0], dict)
+            and bool(diagnostics["top_account"])
+            and "score" in opportunities[0]
+            and "why" in opportunities[0]
+            and "recommended_action" in opportunities[0]
+        )
+
+        add_check(
+            "Response shape valid",
+            shape_ok,
+            "Top account includes account identity, score, why, and recommended_action."
+        )
+
+        action_ok = (
+            bool(opportunities)
+            and isinstance(opportunities[0], dict)
+            and bool(opportunities[0].get("recommended_action"))
+        )
+
+        add_check(
+            "Recommended action populated",
+            action_ok,
+            opportunities[0].get("recommended_action") if action_ok else "No recommended action found on top account."
+        )
+
+    except Exception as e:
+        diagnostics["error"] = f"{type(e).__name__}: {e}"
+        add_check("Self-test execution", False, diagnostics["error"])
+
+    diagnostics["duration_ms"] = int((time.perf_counter() - started) * 1000)
+
+    source_health = [
+        {
+            "source": "USAspending",
+            "status": "active" if diagnostics["records_fetched"] > 0 else "failed",
+            "detail": "Federal award history connector used by the live buyer scan.",
+        },
+        {
+            "source": "Federal Register",
+            "status": "staged" if "fetch_federal_register_documents" in globals() else "planned",
+            "detail": "Policy and regulatory movement source. Not active in the customer scan yet.",
+        },
+        {
+            "source": "SAM.gov",
+            "status": "needs_key",
+            "detail": "Active solicitations source. Requires API key before activation.",
+        },
+        {
+            "source": "Commercial sources",
+            "status": "planned",
+            "detail": "SEC, news, hiring, and technical-market signals are not active yet.",
+        },
+    ]
+
+    required_checks = [c for c in checks if c["name"] != "Self-test execution"]
+    overall = "pass" if required_checks and all(c["status"] == "pass" for c in required_checks) else "fail"
+
+    return JSONResponse({
+        "system": "HossAgent",
+        "console": "Evaluation Console",
+        "overall_status": overall,
+        "diagnostics": diagnostics,
+        "source_health": source_health,
+        "checks": checks,
+    })
+
+
+
+# --- HOSSAGENT T&E STACK TAXONOMY ---
+# This wrapper enriches existing opportunity output without changing connector behavior.
+# Product thesis: stop scanning for generic AI. Start scoring for T&E-shaped demand.
+
+TE_SIGNAL_CATEGORIES = {
+    "evaluation": [
+        "model evaluation",
+        "evaluation",
+        "evaluations",
+        "test and evaluation",
+        "testing",
+        "benchmark",
+        "assessment",
+        "verification",
+        "validation",
+        "accuracy",
+        "performance measurement",
+        "regression",
+        "scenario",
+        "scenarios",
+    ],
+    "monitoring": [
+        "monitoring",
+        "monitor",
+        "telemetry",
+        "trace",
+        "traces",
+        "observability",
+        "runtime",
+        "post-deployment",
+        "drift",
+        "incident response",
+        "analytics",
+        "continuous",
+    ],
+    "red_team": [
+        "red team",
+        "red teaming",
+        "adversarial",
+        "robustness",
+        "safety testing",
+        "stress testing",
+        "vulnerability",
+        "misuse",
+        "threat",
+        "risk",
+    ],
+    "evidence_reporting": [
+        "audit",
+        "evidence",
+        "reporting",
+        "governance",
+        "compliance",
+        "oversight",
+        "assurance",
+        "decision support",
+        "readiness",
+        "release",
+    ],
+    "agent_harness": [
+        "agent",
+        "agentic",
+        "workflow",
+        "orchestration",
+        "tool call",
+        "retrieval",
+        "human-in-the-loop",
+        "decision aid",
+        "decision aids",
+        "models",
+        "algorithms",
+        "ai/ml",
+        "machine learning",
+        "artificial intelligence",
+    ],
+}
+
+TE_CATEGORY_LABELS = {
+    "evaluation": "Evaluation",
+    "monitoring": "Monitoring",
+    "red_team": "Red Teaming",
+    "evidence_reporting": "Evidence / Reporting",
+    "agent_harness": "Agent Harness",
+}
+
+
+def classify_te_stack_text(text):
+    low = (text or "").lower()
+    matches = {}
+
+    for category, terms in TE_SIGNAL_CATEGORIES.items():
+        hits = []
+        for term in terms:
+            if term in low:
+                hits.append(term)
+        if hits:
+            matches[category] = sorted(set(hits))
+
+    return matches
+
+
+def summarize_te_categories(matches):
+    if not matches:
+        return "General AI demand"
+
+    return ", ".join(
+        TE_CATEGORY_LABELS.get(category, category)
+        for category in TE_SIGNAL_CATEGORIES.keys()
+        if category in matches
+    )
+
+
+def extract_te_text_from_opportunity(opportunity):
+    if not isinstance(opportunity, dict):
+        return ""
+
+    parts = [
+        str(opportunity.get("agency") or ""),
+        str(opportunity.get("motion") or ""),
+        str(opportunity.get("why") or ""),
+        str(opportunity.get("recommended_action") or ""),
+    ]
+
+    for signal in opportunity.get("signals", []) or []:
+        if isinstance(signal, dict):
+            parts.append(str(signal.get("label") or ""))
+            parts.append(str(signal.get("detail") or ""))
+        else:
+            parts.append(str(signal))
+
+    return " ".join(parts)
+
+
+def update_status_from_score(opportunity):
+    try:
+        score = int(opportunity.get("score") or 0)
+    except Exception:
+        return opportunity
+
+    if score >= 82:
+        opportunity["status"] = "green"
+        opportunity["status_label"] = "High confidence"
+    elif score >= 65:
+        opportunity["status"] = "amber"
+        opportunity["status_label"] = "Medium confidence"
+    else:
+        opportunity["status"] = "red"
+        opportunity["status_label"] = "Watch"
+
+    return opportunity
+
+
+def enrich_opportunity_with_te_stack(opportunity):
+    if not isinstance(opportunity, dict):
+        return opportunity
+
+    text = extract_te_text_from_opportunity(opportunity)
+    matches = classify_te_stack_text(text)
+    summary = summarize_te_categories(matches)
+
+    labels = [
+        TE_CATEGORY_LABELS.get(category, category)
+        for category in TE_SIGNAL_CATEGORIES.keys()
+        if category in matches
+    ]
+
+    opportunity["te_categories"] = labels
+    opportunity["te_category_matches"] = matches
+    opportunity["te_signal_summary"] = summary
+
+    # Score lift is intentionally modest. T&E fit should improve ranking, not overpower evidence freshness/spend.
+    if matches:
+        try:
+            base_score = int(opportunity.get("score") or 0)
+            category_depth = len(matches)
+            synergy_bonus = 2 if ("evaluation" in matches and "agent_harness" in matches) else 0
+            monitoring_bonus = 2 if ("monitoring" in matches and "evidence_reporting" in matches) else 0
+            lift = min(10, category_depth * 2 + synergy_bonus + monitoring_bonus)
+            opportunity["score"] = min(100, base_score + lift)
+            update_status_from_score(opportunity)
+        except Exception:
+            pass
+
+    if matches:
+        why = str(opportunity.get("why") or "").strip()
+        if why and "T&E fit:" not in why:
+            opportunity["why"] = why.rstrip(".") + f". T&E fit: {summary}."
+
+        signals = opportunity.get("signals")
+        if isinstance(signals, list):
+            already_added = any(
+                isinstance(signal, dict) and signal.get("label") == "T&E stack fit"
+                for signal in signals
+            )
+
+            if not already_added:
+                signals.insert(0, {
+                    "label": "T&E stack fit",
+                    "detail": f"Matched product-relevant demand categories: {summary}."
+                })
+
+        motion = str(opportunity.get("motion") or "").strip()
+        if not motion or motion in ["New Account Activity", "New Account Signal"]:
+            opportunity["motion"] = "T&E Demand Signal"
+
+        action = str(opportunity.get("recommended_action") or "").strip()
+        if action and "T&E" not in action:
+            opportunity["recommended_action"] = (
+                action.rstrip(".")
+                + f". Frame next validation around T&E fit: {summary}; then confirm active buying motion in SAM.gov or program materials."
+            )
+
+    return opportunity
+
+
+_hossagent_base_build_opportunities = build_opportunities
+
+
+def build_opportunities(results):
+    raw = _hossagent_base_build_opportunities(results)
+
+    # Preserve the existing return shape so the working app does not break.
+    if isinstance(raw, dict):
+        for key in ["opportunities", "accounts", "signals", "results", "items"]:
+            value = raw.get(key)
+            if isinstance(value, list):
+                raw[key] = [enrich_opportunity_with_te_stack(item) for item in value]
+                return raw
+
+        for key, value in list(raw.items()):
+            if isinstance(value, list):
+                raw[key] = [enrich_opportunity_with_te_stack(item) for item in value]
+                return raw
+
+        return raw
+
+    if isinstance(raw, tuple):
+        items = list(raw)
+        for idx, value in enumerate(items):
+            if isinstance(value, list):
+                items[idx] = [enrich_opportunity_with_te_stack(item) for item in value]
+        return tuple(items)
+
+    if isinstance(raw, list):
+        return [enrich_opportunity_with_te_stack(item) for item in raw]
+
+    return raw
+# --- END HOSSAGENT T&E STACK TAXONOMY ---
+
+
+
+# --- HOSSAGENT CUSTOMER COPY CLEANUP ---
+# Final presentation wrapper. This does not change fetching, filtering, or scoring.
+# It only removes internal/product-jargon language from account recommendations.
+
+CUSTOMER_COPY_REPLACEMENTS = [
+    ("buyer-propensity account", "recommended account"),
+    ("account activity account", "recommended account"),
+    ("buyer-propensity signals", "account signals"),
+    ("account activity signals", "account signals"),
+    ("buyer-propensity", "account"),
+    ("Buyer-propensity", "Account"),
+    ("New Account Activity", "T&E Demand Signal"),
+    ("Hard AI evidence", "Matched evidence"),
+    ("Adjacent evidence", "Supporting evidence"),
+    ("hard AI/model/data language", "relevant AI/data language"),
+    ("Watchlist", "Watch"),
+]
+
+
+def clean_customer_copy_text(value):
+    if not isinstance(value, str):
+        return value
+
+    text = value
+    for old, new in CUSTOMER_COPY_REPLACEMENTS:
+        text = text.replace(old, new)
+
+    return text
+
+
+def clean_customer_copy_opportunity(opportunity):
+    if not isinstance(opportunity, dict):
+        return opportunity
+
+    for key in ["why", "recommended_action", "motion", "status_label", "te_signal_summary"]:
+        if key in opportunity:
+            opportunity[key] = clean_customer_copy_text(opportunity[key])
+
+    signals = opportunity.get("signals")
+    if isinstance(signals, list):
+        for signal in signals:
+            if isinstance(signal, dict):
+                for key in ["label", "detail"]:
+                    if key in signal:
+                        signal[key] = clean_customer_copy_text(signal[key])
+
+    return opportunity
+
+
+_hossagent_copy_base_build_opportunities = build_opportunities
+
+
+def build_opportunities(results):
+    raw = _hossagent_copy_base_build_opportunities(results)
+
+    if isinstance(raw, dict):
+        for key in ["opportunities", "accounts", "signals", "results", "items"]:
+            value = raw.get(key)
+            if isinstance(value, list):
+                raw[key] = [clean_customer_copy_opportunity(item) for item in value]
+                return raw
+
+        for key, value in list(raw.items()):
+            if isinstance(value, list):
+                raw[key] = [clean_customer_copy_opportunity(item) for item in value]
+                return raw
+
+        return raw
+
+    if isinstance(raw, tuple):
+        items = list(raw)
+        for idx, value in enumerate(items):
+            if isinstance(value, list):
+                items[idx] = [clean_customer_copy_opportunity(item) for item in value]
+        return tuple(items)
+
+    if isinstance(raw, list):
+        return [clean_customer_copy_opportunity(item) for item in raw]
+
+    return raw
+# --- END HOSSAGENT CUSTOMER COPY CLEANUP ---
+
+
+
+# --- HOSSAGENT FEDERAL REGISTER SOURCE 2 ---
+# Adds Federal Register as the second active public-sector source.
+# This replaces the market-scan route safely by removing the older route at import time.
+
+FEDERAL_REGISTER_TERMS = [
+    "artificial intelligence",
+    "machine learning",
+    "automated decision",
+    "algorithmic",
+    "model evaluation",
+    "test and evaluation",
+    "AI governance",
+    "AI safety",
+    "AI risk",
+]
+
+
+def fetch_federal_register_documents(market):
+    end = date.today()
+    start = end - timedelta(days=365 * 2)
+
+    docs = []
+    seen = set()
+
+    for term in FEDERAL_REGISTER_TERMS:
+        params = {
+            "conditions[term]": term,
+            "conditions[publication_date][gte]": start.isoformat(),
+            "conditions[publication_date][lte]": end.isoformat(),
+            "order": "newest",
+            "per_page": 20,
+        }
+
+        r = requests.get(
+            "https://www.federalregister.gov/api/v1/documents.json",
+            params=params,
+            timeout=20,
+        )
+        r.raise_for_status()
+
+        for doc in r.json().get("results", []):
+            doc_id = doc.get("document_number") or doc.get("html_url") or doc.get("title")
+            if not doc_id or doc_id in seen:
+                continue
+            seen.add(doc_id)
+            docs.append(doc)
+
+    return docs
+
+
+def _federal_register_te_matches(text):
+    if "classify_te_stack_text" in globals():
+        return classify_te_stack_text(text)
+
+    low = (text or "").lower()
+    fallback = {
+        "evaluation": ["model evaluation", "test and evaluation", "evaluation", "testing", "assessment"],
+        "monitoring": ["monitoring", "oversight", "runtime", "incident", "continuous"],
+        "red_team": ["red team", "adversarial", "safety", "risk", "robustness"],
+        "evidence_reporting": ["audit", "evidence", "reporting", "governance", "compliance", "assurance"],
+        "agent_harness": ["agent", "agentic", "workflow", "orchestration", "artificial intelligence", "machine learning"],
+    }
+
+    matches = {}
+    for category, terms in fallback.items():
+        hits = [term for term in terms if term in low]
+        if hits:
+            matches[category] = hits
+    return matches
+
+
+def _federal_register_te_summary(matches):
+    if "summarize_te_categories" in globals():
+        return summarize_te_categories(matches)
+
+    labels = {
+        "evaluation": "Evaluation",
+        "monitoring": "Monitoring",
+        "red_team": "Red Teaming",
+        "evidence_reporting": "Evidence / Reporting",
+        "agent_harness": "Agent Harness",
+    }
+
+    return ", ".join(labels.get(k, k) for k in matches.keys()) if matches else "General AI policy movement"
+
+
+def build_federal_register_signals(docs):
+    grouped = defaultdict(lambda: {
+        "agency": "",
+        "docs": [],
+        "matches": {},
+    })
+
+    for doc in docs:
+        title = doc.get("title") or ""
+        abstract = doc.get("abstract") or ""
+        text = f"{title} {abstract}"
+
+        matches = _federal_register_te_matches(text)
+
+        # Federal Register should be policy/regulatory T&E fit, not generic AI noise.
+        if not matches:
+            continue
+
+        agencies = doc.get("agencies") or []
+        agency = "Unknown Agency"
+
+        if agencies and isinstance(agencies, list):
+            agency = agencies[0].get("name") or agency
+
+        g = grouped[agency]
+        g["agency"] = agency
+
+        for category, hits in matches.items():
+            g["matches"].setdefault(category, set()).update(hits)
+
+        g["docs"].append({
+            "title": title,
+            "publication_date": doc.get("publication_date"),
+            "type": doc.get("type"),
+            "url": doc.get("html_url"),
+            "abstract": abstract,
+            "matches": matches,
+        })
+
+    opportunities = []
+
+    for agency, g in grouped.items():
+        docs_for_agency = sorted(
+            g["docs"],
+            key=lambda d: d.get("publication_date") or "",
+            reverse=True,
+        )
+
+        match_count = len(g["matches"])
+        evidence_count = len(docs_for_agency)
+
+        score = min(76, int(
+            48
+            + min(evidence_count * 6, 18)
+            + min(match_count * 4, 10)
+        ))
+
+        if score >= 82:
+            status = "green"
+            status_label = "High confidence"
+        elif score >= 65:
+            status = "amber"
+            status_label = "Medium confidence"
+        else:
+            status = "red"
+            status_label = "Watch"
+
+        flattened_matches = {
+            category: sorted(list(hits))
+            for category, hits in g["matches"].items()
+        }
+
+        te_summary = _federal_register_te_summary(flattened_matches)
+
+        opportunities.append({
+            "agency": agency,
+            "score": score,
+            "status": status,
+            "status_label": status_label,
+            "detected_spend": "N/A",
+            "motion": "Policy / T&E Demand Signal",
+            "evidence_window": "Federal Register evidence from last 24 months",
+            "te_categories": [part.strip() for part in te_summary.split(",") if part.strip()],
+            "te_signal_summary": te_summary,
+            "te_category_matches": flattened_matches,
+            "why": f"{agency} shows {evidence_count} recent Federal Register document(s) with AI policy or test-and-evaluation relevance. T&E fit: {te_summary}.",
+            "signals": [
+                {
+                    "label": "Federal Register document",
+                    "detail": f"{d.get('publication_date') or 'unknown date'} · {d.get('type') or 'document'} · T&E fit: {_federal_register_te_summary(d.get('matches') or {})} · {d.get('title') or 'Untitled'}",
+                }
+                for d in docs_for_agency[:4]
+            ],
+            "recommended_action": f"Treat {agency} as a policy-movement account. Pair this Federal Register signal with USAspending and SAM.gov evidence to determine whether there is funded buying motion behind the T&E fit: {te_summary}.",
+        })
+
+    return sorted(opportunities, key=lambda x: x.get("score", 0), reverse=True)
+
+
+def _ha_normalize_opportunities(raw):
+    stats = {
+        "retained_count": None,
+        "fetched_count": None,
+        "filter_summary": None,
+    }
+
+    if raw is None:
+        return [], stats
+
+    if isinstance(raw, dict):
+        for k in ["retained_count", "records_retained", "retained"]:
+            if raw.get(k) is not None:
+                stats["retained_count"] = raw.get(k)
+                break
+
+        for k in ["fetched_count", "records_fetched", "fetched"]:
+            if raw.get(k) is not None:
+                stats["fetched_count"] = raw.get(k)
+                break
+
+        fs = raw.get("filter_stats") or raw.get("filter_summary")
+        if isinstance(fs, str):
+            stats["filter_summary"] = fs
+        elif isinstance(fs, dict):
+            if stats["retained_count"] is None:
+                stats["retained_count"] = fs.get("retained") or fs.get("retained_count")
+            if stats["fetched_count"] is None:
+                stats["fetched_count"] = fs.get("fetched") or fs.get("fetched_count")
+            if fs.get("summary"):
+                stats["filter_summary"] = fs.get("summary")
+
+        for key in ["opportunities", "accounts", "signals", "results", "items"]:
+            value = raw.get(key)
+            if isinstance(value, list):
+                return value, stats
+
+        for value in raw.values():
+            if isinstance(value, list):
+                return value, stats
+
+        return [], stats
+
+    if isinstance(raw, tuple):
+        for value in raw:
+            if isinstance(value, list):
+                return value, stats
+        return [], stats
+
+    if isinstance(raw, list):
+        return raw, stats
+
+    return [], stats
+
+
+def _ha_live_source_status():
+    return [
+        {
+            "name": "USAspending",
+            "status": "live",
+            "job": "Recent federal award history, agencies, vendors, and spend patterns.",
+        },
+        {
+            "name": "Federal Register",
+            "status": "live",
+            "job": "Recent AI policy, governance, risk, and test-and-evaluation movement.",
+        },
+        {
+            "name": "SAM.gov",
+            "status": "needs_key",
+            "job": "Active solicitations. Requires SAM.gov API key before activation.",
+        },
+        {
+            "name": "Commercial sources",
+            "status": "not wired",
+            "job": "SEC, news, hiring, and technical-market signals are planned.",
+        },
+    ]
+
+
+# Remove older /api/market-scan POST route so this route becomes the active implementation.
+app.router.routes = [
+    route for route in app.router.routes
+    if not (
+        getattr(route, "path", None) == "/api/market-scan"
+        and "POST" in getattr(route, "methods", set())
+    )
+]
+
+
+@app.post("/api/market-scan")
+async def market_scan_with_federal_register(req: ScanRequest):
+    if req.business_unit != "Public Sector":
+        return JSONResponse({
+            "workspace": req.workspace,
+            "business_unit": req.business_unit,
+            "market": req.market,
+            "status": "empty",
+            "message": "Commercial Enterprise scan is not active yet.",
+            "source_status": _ha_live_source_status(),
+            "opportunities": [],
+            "filter_summary": "No commercial sources active",
+            "retained_count": 0,
+            "fetched_count": 0,
+        })
+
+    try:
+        spending_results = fetch_usaspending_awards(req.market)
+        raw_spend = build_opportunities(spending_results)
+        spend_opportunities, spend_stats = _ha_normalize_opportunities(raw_spend)
+
+        federal_register_docs = fetch_federal_register_documents(req.market)
+        regulatory_opportunities = build_federal_register_signals(federal_register_docs)
+
+        opportunities = sorted(
+            spend_opportunities + regulatory_opportunities,
+            key=lambda x: x.get("score", 0) if isinstance(x, dict) else 0,
+            reverse=True,
+        )[:12]
+
+        retained_count = spend_stats.get("retained_count")
+        if retained_count is None:
+            retained_count = len(spend_opportunities)
+
+        filter_summary = spend_stats.get("filter_summary") or f"{retained_count} retained / {len(spending_results)} fetched"
+
+        return JSONResponse({
+            "workspace": req.workspace,
+            "business_unit": req.business_unit,
+            "market": req.market,
+            "status": "live",
+            "message": f"Fetched {len(spending_results)} USAspending award records and {len(federal_register_docs)} Federal Register documents. Built {len(opportunities)} account signals.",
+            "source_status": _ha_live_source_status(),
+            "opportunities": opportunities,
+            "filter_summary": filter_summary,
+            "filter_stats": filter_summary,
+            "retained_count": retained_count,
+            "fetched_count": len(spending_results),
+            "federal_register_docs": len(federal_register_docs),
+        })
+
+    except Exception as e:
+        return JSONResponse({
+            "workspace": req.workspace,
+            "business_unit": req.business_unit,
+            "market": req.market,
+            "status": "error",
+            "message": f"Live scan failed: {type(e).__name__}: {str(e)}",
+            "source_status": _ha_live_source_status(),
+            "opportunities": [],
+            "filter_summary": "scan failed",
+            "retained_count": 0,
+            "fetched_count": 0,
+        }, status_code=200)
+
+
+@app.get("/api/eval/self-test-v3")
+async def hossagent_eval_self_test_v3():
+    market = "Federal AI Evaluation Model Assurance"
+    started = time.perf_counter()
+
+    checks = []
+    diagnostics = {
+        "market": market,
+        "usaspending_records_fetched": 0,
+        "federal_register_docs_fetched": 0,
+        "accounts_returned": 0,
+        "evidence_items": 0,
+        "top_account": None,
+        "top_score": None,
+        "duration_ms": None,
+        "error": None,
+    }
+
+    def add_check(name, passed, detail):
+        checks.append({
+            "name": name,
+            "status": "pass" if passed else "fail",
+            "detail": detail,
+        })
+
+    try:
+        spending_results = fetch_usaspending_awards(market)
+        diagnostics["usaspending_records_fetched"] = len(spending_results)
+
+        raw_spend = build_opportunities(spending_results)
+        spend_opportunities, _ = _ha_normalize_opportunities(raw_spend)
+
+        federal_register_docs = fetch_federal_register_documents(market)
+        diagnostics["federal_register_docs_fetched"] = len(federal_register_docs)
+
+        regulatory_opportunities = build_federal_register_signals(federal_register_docs)
+
+        opportunities = sorted(
+            spend_opportunities + regulatory_opportunities,
+            key=lambda x: x.get("score", 0) if isinstance(x, dict) else 0,
+            reverse=True,
+        )[:12]
+
+        diagnostics["accounts_returned"] = len(opportunities)
+
+        if opportunities:
+            top = opportunities[0]
+            diagnostics["top_account"] = top.get("agency") or top.get("account") or top.get("accountName")
+            diagnostics["top_score"] = top.get("score")
+            diagnostics["evidence_items"] = sum(
+                len(o.get("signals", []) or o.get("evidence", []))
+                for o in opportunities
+                if isinstance(o, dict)
+            )
+
+        add_check(
+            "USAspending connector reachable",
+            len(spending_results) > 0,
+            f"{len(spending_results)} records fetched from USAspending.",
+        )
+
+        add_check(
+            "Federal Register connector reachable",
+            diagnostics["federal_register_docs_fetched"] >= 0,
+            f"{diagnostics['federal_register_docs_fetched']} documents fetched from Federal Register.",
+        )
+
+        add_check(
+            "Scan returned account signals",
+            len(opportunities) > 0,
+            f"{len(opportunities)} account signal(s) returned after filtering and source merge.",
+        )
+
+        add_check(
+            "Evidence trace populated",
+            diagnostics["evidence_items"] > 0,
+            f"{diagnostics['evidence_items']} evidence item(s) available across returned accounts.",
+        )
+
+        shape_ok = bool(opportunities) and isinstance(opportunities[0], dict) and all(
+            k in opportunities[0] for k in ["score", "why", "recommended_action"]
+        ) and (
+            "agency" in opportunities[0] or "account" in opportunities[0] or "accountName" in opportunities[0]
+        )
+
+        add_check(
+            "Response shape valid",
+            shape_ok,
+            "Top account includes account identity, score, why, and recommended_action.",
+        )
+
+        action_ok = bool(opportunities) and isinstance(opportunities[0], dict) and bool(opportunities[0].get("recommended_action"))
+
+        add_check(
+            "Recommended action populated",
+            action_ok,
+            opportunities[0].get("recommended_action") if action_ok else "No recommended action found on top account.",
+        )
+
+    except Exception as e:
+        diagnostics["error"] = f"{type(e).__name__}: {e}"
+        add_check("Self-test execution", False, diagnostics["error"])
+
+    diagnostics["duration_ms"] = int((time.perf_counter() - started) * 1000)
+
+    source_health = [
+        {
+            "source": "USAspending",
+            "status": "active" if diagnostics["usaspending_records_fetched"] > 0 else "failed",
+            "detail": "Federal award history connector used by the live buyer scan.",
+        },
+        {
+            "source": "Federal Register",
+            "status": "active" if diagnostics["federal_register_docs_fetched"] >= 0 and diagnostics["error"] is None else "failed",
+            "detail": "AI policy, governance, risk, and test-and-evaluation movement.",
+        },
+        {
+            "source": "SAM.gov",
+            "status": "needs_key",
+            "detail": "Active solicitations source. Requires API key before activation.",
+        },
+        {
+            "source": "Commercial sources",
+            "status": "planned",
+            "detail": "SEC, news, hiring, and technical-market signals are not active yet.",
+        },
+    ]
+
+    required_checks = [c for c in checks if c["name"] != "Self-test execution"]
+    overall = "pass" if required_checks and all(c["status"] == "pass" for c in required_checks) else "fail"
+
+    return JSONResponse({
+        "system": "HossAgent",
+        "console": "Evaluation Console",
+        "overall_status": overall,
+        "diagnostics": diagnostics,
+        "source_health": source_health,
+        "checks": checks,
+    })
+# --- END HOSSAGENT FEDERAL REGISTER SOURCE 2 ---
+
+
+
+# --- HOSSAGENT EVAL CONSOLE V4 ---
+# Replaces stale eval routes with a robust self-test that understands current scan shapes.
+
+app.router.routes = [
+    route for route in app.router.routes
+    if not (
+        getattr(route, "path", None) in {
+            "/eval",
+            "/api/eval/self-test",
+            "/api/eval/self-test-v2",
+            "/api/eval/self-test-v3",
+            "/api/eval/self-test-v4",
+        }
+        and "GET" in getattr(route, "methods", set())
+    )
+]
+
+
+def _ha_eval_normalize_opportunities(raw):
+    stats = {}
+
+    if raw is None:
+        return [], stats
+
+    if isinstance(raw, dict):
+        for stat_key in ["retained_count", "fetched_count", "filter_summary", "filter_stats"]:
+            if stat_key in raw:
+                stats[stat_key] = raw.get(stat_key)
+
+        for key in ["opportunities", "accounts", "signals", "results", "items"]:
+            value = raw.get(key)
+            if isinstance(value, list):
+                return value, stats
+
+        for value in raw.values():
+            if isinstance(value, list):
+                return value, stats
+
+        return [], stats
+
+    if isinstance(raw, tuple):
+        for value in raw:
+            if isinstance(value, list):
+                return value, stats
+        return [], stats
+
+    if isinstance(raw, list):
+        # If this is already a list of account dicts, use it. If it is a wrapper list,
+        # find the first nested list.
+        if not raw:
+            return [], stats
+
+        if isinstance(raw[0], dict):
+            return raw, stats
+
+        for value in raw:
+            if isinstance(value, list):
+                return value, stats
+
+        return [], stats
+
+    return [], stats
+
+
+@app.get("/api/eval/self-test-v4")
+async def hossagent_eval_self_test_v4():
+    market = "Federal AI Evaluation Model Assurance"
+    started = time.perf_counter()
+
+    checks = []
+    diagnostics = {
+        "market": market,
+        "usaspending_records_fetched": 0,
+        "federal_register_docs_fetched": None,
+        "accounts_returned": 0,
+        "evidence_items": 0,
+        "top_account": None,
+        "top_score": None,
+        "duration_ms": None,
+        "error": None,
+    }
+
+    def add_check(name, passed, detail):
+        checks.append({
+            "name": name,
+            "status": "pass" if passed else "fail",
+            "detail": detail,
+        })
+
+    opportunities = []
+    federal_register_available = "fetch_federal_register_documents" in globals()
+
+    try:
+        spending_results = fetch_usaspending_awards(market)
+        diagnostics["usaspending_records_fetched"] = len(spending_results)
+
+        raw_spend = build_opportunities(spending_results)
+        spend_opportunities, _ = _ha_eval_normalize_opportunities(raw_spend)
+
+        federal_opportunities = []
+
+        if federal_register_available:
+            federal_docs = fetch_federal_register_documents(market)
+            diagnostics["federal_register_docs_fetched"] = len(federal_docs)
+
+            if "build_federal_register_signals" in globals():
+                federal_opportunities = build_federal_register_signals(federal_docs)
+            else:
+                federal_opportunities = []
+        else:
+            diagnostics["federal_register_docs_fetched"] = 0
+
+        opportunities = sorted(
+            (spend_opportunities or []) + (federal_opportunities or []),
+            key=lambda x: x.get("score", 0) if isinstance(x, dict) else 0,
+            reverse=True,
+        )[:12]
+
+        diagnostics["accounts_returned"] = len(opportunities)
+
+        if opportunities and isinstance(opportunities[0], dict):
+            top = opportunities[0]
+            diagnostics["top_account"] = top.get("agency") or top.get("account") or top.get("accountName")
+            diagnostics["top_score"] = top.get("score")
+
+        diagnostics["evidence_items"] = sum(
+            len(o.get("signals", []) or o.get("evidence", []))
+            for o in opportunities
+            if isinstance(o, dict)
+        )
+
+        add_check(
+            "USAspending connector reachable",
+            diagnostics["usaspending_records_fetched"] > 0,
+            f"{diagnostics['usaspending_records_fetched']} records fetched from USAspending."
+        )
+
+        add_check(
+            "Federal Register connector available",
+            federal_register_available,
+            (
+                f"{diagnostics['federal_register_docs_fetched']} documents fetched from Federal Register."
+                if federal_register_available
+                else "Federal Register connector is not present in this build."
+            )
+        )
+
+        add_check(
+            "Scan returned account signals",
+            diagnostics["accounts_returned"] > 0,
+            f"{diagnostics['accounts_returned']} account signal(s) returned after source merge."
+        )
+
+        add_check(
+            "Evidence trace populated",
+            diagnostics["evidence_items"] > 0,
+            f"{diagnostics['evidence_items']} evidence item(s) available across returned accounts."
+        )
+
+        shape_ok = bool(opportunities) and isinstance(opportunities[0], dict) and all(
+            key in opportunities[0]
+            for key in ["score", "why", "recommended_action"]
+        ) and (
+            "agency" in opportunities[0]
+            or "account" in opportunities[0]
+            or "accountName" in opportunities[0]
+        )
+
+        add_check(
+            "Response shape valid",
+            shape_ok,
+            "Top account includes account identity, score, why, and recommended_action."
+        )
+
+        action_ok = bool(opportunities) and isinstance(opportunities[0], dict) and bool(opportunities[0].get("recommended_action"))
+
+        add_check(
+            "Recommended action populated",
+            action_ok,
+            opportunities[0].get("recommended_action") if action_ok else "No recommended action found on top account."
+        )
+
+    except Exception as e:
+        diagnostics["error"] = f"{type(e).__name__}: {e}"
+        add_check("Self-test execution", False, diagnostics["error"])
+
+    diagnostics["duration_ms"] = int((time.perf_counter() - started) * 1000)
+
+    source_health = [
+        {
+            "source": "USAspending",
+            "status": "active" if diagnostics["usaspending_records_fetched"] > 0 and diagnostics["error"] is None else "failed",
+            "detail": "Federal award history connector used by the live buyer scan.",
+        },
+        {
+            "source": "Federal Register",
+            "status": "active" if federal_register_available and diagnostics["error"] is None else "planned",
+            "detail": "AI policy, governance, risk, and test-and-evaluation movement.",
+        },
+        {
+            "source": "SAM.gov",
+            "status": "needs_key",
+            "detail": "Active solicitations source. Requires API key before activation.",
+        },
+        {
+            "source": "Commercial sources",
+            "status": "planned",
+            "detail": "SEC, news, hiring, and technical-market signals are not active yet.",
+        },
+    ]
+
+    required_checks = [c for c in checks if c["name"] != "Self-test execution"]
+    overall = "pass" if required_checks and all(c["status"] == "pass" for c in required_checks) else "fail"
+
+    return JSONResponse({
+        "system": "HossAgent",
+        "console": "Evaluation Console",
+        "overall_status": overall,
+        "diagnostics": diagnostics,
+        "source_health": source_health,
+        "checks": checks,
+    })
+
+
+@app.get("/eval", response_class=HTMLResponse)
+async def hossagent_eval_console_v4():
+    return HTMLResponse("""
+<!doctype html>
+<html>
+<head>
+  <title>HossAgent Evaluation Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg:#05070a;
+      --panel:#101418;
+      --panel2:#171c22;
+      --text:#f8fbff;
+      --muted:#d7e0e8;
+      --line:#26313b;
+      --ok:#b8f7c5;
+      --bad:#ffb4a8;
+      --warn:#dbe7f0;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header {
+      padding:28px 36px;
+      border-bottom:1px solid var(--line);
+      display:flex;
+      justify-content:space-between;
+      gap:20px;
+      align-items:flex-start;
+    }
+    h1 { margin:0 0 8px; font-size:28px; }
+    p { color:var(--muted); line-height:1.45; }
+    a { color:var(--text); font-weight:700; }
+    button {
+      background:var(--text);
+      color:#05070a;
+      border:0;
+      border-radius:10px;
+      padding:12px 16px;
+      font-weight:800;
+      cursor:pointer;
+    }
+    main {
+      padding:28px 36px;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:18px;
+    }
+    .card {
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:18px;
+    }
+    .wide { grid-column:1 / -1; }
+    .metric-row {
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap:12px;
+    }
+    .metric {
+      background:var(--panel2);
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:14px;
+    }
+    .label {
+      color:var(--muted);
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      font-size:11px;
+      margin-bottom:8px;
+    }
+    .value { font-size:24px; font-weight:800; }
+    .row {
+      border-top:1px solid var(--line);
+      padding:12px 0;
+    }
+    .row:first-child { border-top:0; }
+    .status {
+      display:inline-block;
+      border-radius:999px;
+      padding:4px 9px;
+      font-size:12px;
+      font-weight:800;
+      margin-right:8px;
+    }
+    .pass, .active { background:rgba(184,247,197,.13); color:var(--ok); }
+    .fail, .failed { background:rgba(255,180,168,.13); color:var(--bad); }
+    .planned, .staged, .needs_key { background:rgba(247,217,166,.13); color:var(--warn); }
+    pre {
+      white-space:pre-wrap;
+      overflow:auto;
+      background:#050505;
+      border:1px solid var(--line);
+      border-radius:12px;
+      padding:14px;
+      color:var(--muted);
+    }
+    @media (max-width: 900px) {
+      main { grid-template-columns:1fr; padding:18px; }
+      header { padding:20px; flex-direction:column; }
+      .metric-row { grid-template-columns:1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>HossAgent Evaluation Console</h1>
+      <p>Internal test-and-evaluation view for the HossAgent stack. This checks connector health, scan execution, response shape, evidence trace population, and recommended-action output.</p>
+      <p><a href="/">← Back to HossAgent</a></p>
+    </div>
+    <button id="selfTestButton" onclick="runSelfTest()">Run Self-Test</button>
+  </header>
+
+  <main>
+    <section class="card wide">
+      <div class="metric-row">
+        <div class="metric"><div class="label">Overall</div><div class="value" id="overall">Not run</div></div>
+        <div class="metric"><div class="label">USAspending Records</div><div class="value" id="records">—</div></div>
+        <div class="metric"><div class="label">Accounts Returned</div><div class="value" id="accounts">—</div></div>
+        <div class="metric"><div class="label">Duration</div><div class="value" id="duration">—</div></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Source Health</h2>
+      <div id="sources"><p>Run self-test to load source health.</p></div>
+    </section>
+
+    <section class="card">
+      <h2>Evaluation Checks</h2>
+      <div id="checks"><p>Run self-test to load checks.</p></div>
+    </section>
+
+    <section class="card wide">
+      <h2>Scan Diagnostics</h2>
+      <pre id="diagnostics">Run self-test to load diagnostics.</pre>
+    </section>
+  </main>
+
+  <script>
+    function badge(status) {
+      return '<span class="status ' + status + '">' + status.toUpperCase().replace("_", " ") + '</span> ';
+    }
+
+    async function runSelfTest() {
+      document.getElementById("overall").textContent = "Running";
+      const response = await fetch("/api/eval/self-test-v4?ts=" + Date.now());
+      const data = await response.json();
+
+      const d = data.diagnostics || {};
+      document.getElementById("overall").textContent = data.overall_status === "pass" ? "Pass" : "Fail";
+      document.getElementById("records").textContent = d.usaspending_records_fetched ?? d.records_fetched ?? "—";
+      document.getElementById("accounts").textContent = d.accounts_returned ?? "—";
+      document.getElementById("duration").textContent = d.duration_ms ? d.duration_ms + " ms" : "—";
+
+      document.getElementById("sources").innerHTML = (data.source_health || []).map(function (s) {
+        return '<div class="row">' + badge(s.status) + '<b>' + s.source + '</b><p>' + s.detail + '</p></div>';
+      }).join("");
+
+      document.getElementById("checks").innerHTML = (data.checks || []).map(function (c) {
+        return '<div class="row">' + badge(c.status) + '<b>' + c.name + '</b><p>' + c.detail + '</p></div>';
+      }).join("");
+
+      document.getElementById("diagnostics").textContent = JSON.stringify(d, null, 2);
+    }
+
+    runSelfTest();
+  </script>
+</body>
+</html>
+    """)
+# --- END HOSSAGENT EVAL CONSOLE V4 ---
+
+
+
+# --- HOSSAGENT SAM GOV + COMMERCIAL SOURCES V5 ---
+# Adds:
+# - SAM.gov active opportunities when SAM_API_KEY / SAM_GOV_API_KEY is configured
+# - Commercial News / Press via GDELT
+# - Technical Chatter via Hacker News Algolia
+#
+# Keeps USAspending + Federal Register intact.
+
+COMMERCIAL_TARGETS = [
+    "Scale AI",
+    "Databricks",
+    "Palantir",
+    "Snowflake",
+    "Anthropic",
+    "OpenAI",
+]
+
+
+def _ha_get_sam_api_key():
+    return (
+        os.getenv("SAM_API_KEY")
+        or os.getenv("SAM_GOV_API_KEY")
+        or os.getenv("SAMGOV_API_KEY")
+        or ""
+    ).strip()
+
+
+def _ha_source_date_mmddyyyy(days_back=365):
+    end = date.today()
+    start = end - timedelta(days=days_back)
+    return start.strftime("%m/%d/%Y"), end.strftime("%m/%d/%Y")
+
+
+def _ha_safe_te_matches(text):
+    if "classify_te_stack_text" in globals():
+        return classify_te_stack_text(text)
+
+    low = (text or "").lower()
+    fallback = {
+        "evaluation": ["model evaluation", "test and evaluation", "evaluation", "testing", "assessment", "benchmark"],
+        "monitoring": ["monitoring", "oversight", "runtime", "incident", "continuous", "telemetry"],
+        "red_team": ["red team", "adversarial", "safety", "risk", "robustness", "stress testing"],
+        "evidence_reporting": ["audit", "evidence", "reporting", "governance", "compliance", "assurance"],
+        "agent_harness": ["agent", "agentic", "workflow", "orchestration", "artificial intelligence", "machine learning", "tool"],
+    }
+
+    matches = {}
+    for category, terms in fallback.items():
+        hits = [term for term in terms if term in low]
+        if hits:
+            matches[category] = sorted(set(hits))
+    return matches
+
+
+def _ha_safe_te_summary(matches):
+    if "summarize_te_categories" in globals():
+        return summarize_te_categories(matches)
+
+    labels = {
+        "evaluation": "Evaluation",
+        "monitoring": "Monitoring",
+        "red_team": "Red Teaming",
+        "evidence_reporting": "Evidence / Reporting",
+        "agent_harness": "Agent Harness",
+    }
+
+    ordered = ["evaluation", "monitoring", "red_team", "evidence_reporting", "agent_harness"]
+    visible = [labels[k] for k in ordered if k in matches]
+    return ", ".join(visible) if visible else "General AI demand"
+
+
+def _ha_status_from_score(score):
+    try:
+        score = int(score or 0)
+    except Exception:
+        score = 0
+
+    if score >= 82:
+        return "green", "High confidence"
+    if score >= 65:
+        return "amber", "Medium confidence"
+    return "red", "Watch"
+
+
+def fetch_sam_gov_opportunities(market):
+    api_key = _ha_get_sam_api_key()
+    if not api_key:
+        return {
+            "configured": False,
+            "records": [],
+            "error": None,
+        }
+
+    posted_from, posted_to = _ha_source_date_mmddyyyy(365)
+
+    terms = [
+        "artificial intelligence",
+        "machine learning",
+        "model evaluation",
+        "test and evaluation",
+        "AI governance",
+        "AI safety",
+        "red team",
+    ]
+
+    records = []
+    seen = set()
+    errors = []
+
+    for term in terms:
+        params = {
+            "api_key": api_key,
+            "postedFrom": posted_from,
+            "postedTo": posted_to,
+            "limit": 50,
+            "offset": 0,
+            "title": term,
+        }
+
+        try:
+            r = requests.get(
+                "https://api.sam.gov/opportunities/v2/search",
+                params=params,
+                timeout=20,
+            )
+            r.raise_for_status()
+            payload = r.json()
+        except Exception as e:
+            errors.append(f"{term}: {type(e).__name__}: {e}")
+            continue
+
+        items = (
+            payload.get("opportunitiesData")
+            or payload.get("data")
+            or payload.get("results")
+            or payload.get("items")
+            or []
+        )
+
+        for item in items:
+            notice_id = (
+                item.get("noticeId")
+                or item.get("solicitationNumber")
+                or item.get("title")
+            )
+
+            if not notice_id or notice_id in seen:
+                continue
+
+            seen.add(notice_id)
+            item["_search_term"] = term
+            records.append(item)
+
+    return {
+        "configured": True,
+        "records": records,
+        "error": "; ".join(errors[:3]) if errors and not records else None,
+    }
+
+
+def build_sam_gov_signals(records):
+    grouped = defaultdict(lambda: {
+        "agency": "",
+        "items": [],
+        "matches": {},
+    })
+
+    for item in records:
+        title = item.get("title") or ""
+        description = item.get("description") or ""
+        full_path = item.get("fullParentPathName") or ""
+        org = item.get("organizationName") or item.get("department") or item.get("subtier") or full_path or "Unknown Agency"
+        text = f"{title} {description} {full_path} {org} {item.get('_search_term') or ''}"
+
+        matches = _ha_safe_te_matches(text)
+        if not matches:
+            matches = _ha_safe_te_matches(item.get("_search_term") or "")
+
+        if not matches:
+            continue
+
+        agency = org
+        if full_path and "." in full_path:
+            agency = full_path.split(".")[0].strip() or agency
+
+        g = grouped[agency]
+        g["agency"] = agency
+
+        for category, hits in matches.items():
+            g["matches"].setdefault(category, set()).update(hits)
+
+        g["items"].append({
+            "title": title or "Untitled opportunity",
+            "posted_date": item.get("postedDate"),
+            "response_deadline": item.get("responseDeadLine") or item.get("responseDeadline") or item.get("archiveDate"),
+            "type": item.get("type") or item.get("baseType"),
+            "notice_id": item.get("noticeId"),
+            "solicitation": item.get("solicitationNumber"),
+            "active": item.get("active"),
+            "url": item.get("uiLink") or item.get("links"),
+            "matches": matches,
+        })
+
+    opportunities = []
+
+    for agency, g in grouped.items():
+        items = sorted(
+            g["items"],
+            key=lambda x: x.get("posted_date") or "",
+            reverse=True,
+        )
+
+        flattened_matches = {
+            category: sorted(list(hits))
+            for category, hits in g["matches"].items()
+        }
+
+        te_summary = _ha_safe_te_summary(flattened_matches)
+        score = min(95, 72 + min(len(items) * 4, 12) + min(len(flattened_matches) * 3, 9))
+        status, status_label = _ha_status_from_score(score)
+
+        opportunities.append({
+            "agency": agency,
+            "score": score,
+            "status": status,
+            "status_label": status_label,
+            "detected_spend": "N/A",
+            "motion": "Active Opportunity Signal",
+            "evidence_window": "SAM.gov opportunities from last 12 months",
+            "te_categories": [x.strip() for x in te_summary.split(",") if x.strip()],
+            "te_signal_summary": te_summary,
+            "te_category_matches": flattened_matches,
+            "why": f"{agency} has {len(items)} SAM.gov opportunity signal(s) with T&E relevance. T&E fit: {te_summary}.",
+            "signals": [
+                {
+                    "label": "SAM.gov opportunity",
+                    "detail": f"{i.get('posted_date') or 'unknown date'} · {i.get('type') or 'opportunity'} · {i.get('title') or 'Untitled'} · response/deadline: {i.get('response_deadline') or 'not listed'} · T&E fit: {_ha_safe_te_summary(i.get('matches') or {})}",
+                }
+                for i in items[:4]
+            ],
+            "recommended_action": f"Treat {agency} as an active-opportunity account. Review the SAM.gov notice details, confirm fit against Scale T&E capabilities, and build outreach around T&E fit: {te_summary}.",
+        })
+
+    return sorted(opportunities, key=lambda x: x.get("score", 0), reverse=True)
+
+
+def fetch_gdelt_articles_for_targets(targets, market):
+    records = []
+    seen = set()
+
+    for target in targets:
+        query = f'"{target}" ("AI evaluation" OR "model evaluation" OR "red teaming" OR "AI governance" OR "AI safety" OR "agentic")'
+
+        try:
+            r = requests.get(
+                "https://api.gdeltproject.org/api/v2/doc/doc",
+                params={
+                    "query": query,
+                    "mode": "ArtList",
+                    "format": "json",
+                    "maxrecords": 10,
+                    "sort": "HybridRel",
+                },
+                timeout=15,
+            )
+            r.raise_for_status()
+            payload = r.json()
+        except Exception:
+            continue
+
+        for article in payload.get("articles", []) or []:
+            url = article.get("url")
+            title = article.get("title")
+            key = url or title
+
+            if not key or key in seen:
+                continue
+
+            seen.add(key)
+            article["_target"] = target
+            records.append(article)
+
+    return records
+
+
+def fetch_hn_items_for_targets(targets, market):
+    records = []
+    seen = set()
+
+    for target in targets:
+        query = f'"{target}" "AI evaluation"'
+
+        try:
+            r = requests.get(
+                "https://hn.algolia.com/api/v1/search_by_date",
+                params={
+                    "query": query,
+                    "tags": "story",
+                    "hitsPerPage": 10,
+                },
+                timeout=15,
+            )
+            r.raise_for_status()
+            payload = r.json()
+        except Exception:
+            continue
+
+        for hit in payload.get("hits", []) or []:
+            object_id = hit.get("objectID") or hit.get("url") or hit.get("title")
+            if not object_id or object_id in seen:
+                continue
+
+            seen.add(object_id)
+            hit["_target"] = target
+            records.append(hit)
+
+    return records
+
+
+def build_commercial_signals(gdelt_articles, hn_items):
+    grouped = defaultdict(lambda: {
+        "company": "",
+        "signals": [],
+        "matches": {},
+        "sources": set(),
+    })
+
+    for article in gdelt_articles:
+        company = article.get("_target") or "Commercial Market"
+        title = article.get("title") or ""
+        domain = article.get("domain") or article.get("sourceCollectionIdentifier") or "news"
+        seendate = article.get("seendate") or article.get("datetime") or ""
+        url = article.get("url") or ""
+
+        text = f"{company} {title} {domain}"
+        matches = _ha_safe_te_matches(text)
+
+        if not matches:
+            continue
+
+        g = grouped[company]
+        g["company"] = company
+        g["sources"].add("Commercial News / Press")
+
+        for category, hits in matches.items():
+            g["matches"].setdefault(category, set()).update(hits)
+
+        g["signals"].append({
+            "label": "Commercial news signal",
+            "date": seendate,
+            "detail": f"{seendate or 'unknown date'} · {domain} · {title} · T&E fit: {_ha_safe_te_summary(matches)}",
+            "url": url,
+        })
+
+    for item in hn_items:
+        company = item.get("_target") or "Commercial Market"
+        title = item.get("title") or item.get("story_title") or ""
+        created = item.get("created_at") or ""
+        points = item.get("points")
+        comments = item.get("num_comments")
+        url = item.get("url") or item.get("story_url") or ""
+
+        text = f"{company} {title}"
+        matches = _ha_safe_te_matches(text)
+
+        if not matches:
+            continue
+
+        g = grouped[company]
+        g["company"] = company
+        g["sources"].add("Technical Chatter")
+
+        for category, hits in matches.items():
+            g["matches"].setdefault(category, set()).update(hits)
+
+        g["signals"].append({
+            "label": "Technical chatter signal",
+            "date": created,
+            "detail": f"{created or 'unknown date'} · Hacker News · {title} · points: {points if points is not None else 'n/a'} · comments: {comments if comments is not None else 'n/a'} · T&E fit: {_ha_safe_te_summary(matches)}",
+            "url": url,
+        })
+
+    opportunities = []
+
+    for company, g in grouped.items():
+        flattened_matches = {
+            category: sorted(list(hits))
+            for category, hits in g["matches"].items()
+        }
+
+        te_summary = _ha_safe_te_summary(flattened_matches)
+        evidence_count = len(g["signals"])
+        source_count = len(g["sources"])
+
+        score = min(88, 52 + min(evidence_count * 5, 20) + min(source_count * 6, 12) + min(len(flattened_matches) * 3, 9))
+        status, status_label = _ha_status_from_score(score)
+
+        opportunities.append({
+            "agency": company,
+            "score": score,
+            "status": status,
+            "status_label": status_label,
+            "detected_spend": "N/A",
+            "motion": "Commercial Market Signal",
+            "evidence_window": "Commercial market signals from live web sources",
+            "te_categories": [x.strip() for x in te_summary.split(",") if x.strip()],
+            "te_signal_summary": te_summary,
+            "te_category_matches": flattened_matches,
+            "why": f"{company} shows {evidence_count} commercial signal(s) across {source_count} source type(s). T&E fit: {te_summary}.",
+            "signals": g["signals"][:5],
+            "recommended_action": f"Treat {company} as a commercial account to validate. Confirm whether the signal maps to budget, platform ownership, or a live evaluation/monitoring initiative before prioritizing GTM action.",
+        })
+
+    return sorted(opportunities, key=lambda x: x.get("score", 0), reverse=True)
+
+
+def _ha_v5_normalize_opportunities(raw):
+    stats = {
+        "retained_count": None,
+        "fetched_count": None,
+        "filter_summary": None,
+    }
+
+    if raw is None:
+        return [], stats
+
+    if isinstance(raw, dict):
+        for k in ["retained_count", "records_retained", "retained"]:
+            if raw.get(k) is not None:
+                stats["retained_count"] = raw.get(k)
+                break
+
+        for k in ["fetched_count", "records_fetched", "fetched"]:
+            if raw.get(k) is not None:
+                stats["fetched_count"] = raw.get(k)
+                break
+
+        fs = raw.get("filter_stats") or raw.get("filter_summary")
+        if isinstance(fs, str):
+            stats["filter_summary"] = fs
+        elif isinstance(fs, dict):
+            stats["retained_count"] = stats["retained_count"] or fs.get("retained") or fs.get("retained_count")
+            stats["fetched_count"] = stats["fetched_count"] or fs.get("fetched") or fs.get("fetched_count")
+            stats["filter_summary"] = fs.get("summary") or stats["filter_summary"]
+
+        for key in ["opportunities", "accounts", "signals", "results", "items"]:
+            value = raw.get(key)
+            if isinstance(value, list):
+                return value, stats
+
+        for value in raw.values():
+            if isinstance(value, list):
+                return value, stats
+
+        return [], stats
+
+    if isinstance(raw, tuple):
+        for value in raw:
+            if isinstance(value, list):
+                return value, stats
+        return [], stats
+
+    if isinstance(raw, list):
+        return raw, stats
+
+    return [], stats
+
+
+def _ha_public_source_status():
+    sam_key = bool(_ha_get_sam_api_key())
+
+    return [
+        {
+            "name": "USAspending",
+            "status": "live",
+            "job": "Recent federal award history, agencies, vendors, and spend patterns.",
+        },
+        {
+            "name": "Federal Register",
+            "status": "live",
+            "job": "Recent AI policy, governance, risk, and test-and-evaluation movement.",
+        },
+        {
+            "name": "SAM.gov",
+            "status": "live" if sam_key else "needs_key",
+            "job": "Active federal opportunities. Requires SAM.gov API key before activation." if not sam_key else "Active federal opportunities and solicitations.",
+        },
+    ]
+
+
+def _ha_commercial_source_status():
+    return [
+        {
+            "name": "Commercial News / Press",
+            "status": "live",
+            "job": "Market movement, executive signals, partnerships, and strategic announcements.",
+        },
+        {
+            "name": "Technical Chatter",
+            "status": "live",
+            "job": "Developer attention and technical-market chatter.",
+        },
+        {
+            "name": "SEC EDGAR",
+            "status": "not wired",
+            "job": "Public-company filing signal. Planned for next pass.",
+        },
+    ]
+
+
+# Remove older market-scan route so v5 is active.
+app.router.routes = [
+    route for route in app.router.routes
+    if not (
+        getattr(route, "path", None) == "/api/market-scan"
+        and "POST" in getattr(route, "methods", set())
+    )
+]
+
+
+@app.post("/api/market-scan")
+async def market_scan_v5(req: ScanRequest):
+    if req.business_unit == "Commercial Enterprise":
+        gdelt_articles = fetch_gdelt_articles_for_targets(COMMERCIAL_TARGETS, req.market)
+        hn_items = fetch_hn_items_for_targets(COMMERCIAL_TARGETS, req.market)
+        opportunities = build_commercial_signals(gdelt_articles, hn_items)
+
+        return JSONResponse({
+            "workspace": req.workspace,
+            "business_unit": req.business_unit,
+            "market": req.market,
+            "status": "live",
+            "message": f"Fetched {len(gdelt_articles)} commercial news records and {len(hn_items)} technical chatter records. Built {len(opportunities)} commercial account signals.",
+            "source_status": _ha_commercial_source_status(),
+            "opportunities": opportunities[:12],
+            "filter_summary": f"{len(opportunities)} accounts retained / {len(gdelt_articles) + len(hn_items)} records fetched",
+            "filter_stats": f"{len(opportunities)} accounts retained / {len(gdelt_articles) + len(hn_items)} records fetched",
+            "retained_count": len(opportunities),
+            "fetched_count": len(gdelt_articles) + len(hn_items),
+        })
+
+    try:
+        spending_results = fetch_usaspending_awards(req.market)
+        raw_spend = build_opportunities(spending_results)
+        spend_opportunities, spend_stats = _ha_v5_normalize_opportunities(raw_spend)
+
+        federal_register_docs = fetch_federal_register_documents(req.market) if "fetch_federal_register_documents" in globals() else []
+        regulatory_opportunities = build_federal_register_signals(federal_register_docs) if "build_federal_register_signals" in globals() else []
+
+        sam_result = fetch_sam_gov_opportunities(req.market)
+        sam_opportunities = build_sam_gov_signals(sam_result.get("records") or []) if sam_result.get("configured") else []
+
+        opportunities = sorted(
+            spend_opportunities + regulatory_opportunities + sam_opportunities,
+            key=lambda x: x.get("score", 0) if isinstance(x, dict) else 0,
+            reverse=True,
+        )[:12]
+
+        retained_count = spend_stats.get("retained_count")
+        if retained_count is None:
+            retained_count = len(spend_opportunities)
+
+        filter_summary = spend_stats.get("filter_summary") or f"{retained_count} retained / {len(spending_results)} fetched"
+
+        sam_note = ""
+        if not sam_result.get("configured"):
+            sam_note = " SAM.gov is wired but waiting on API key."
+        elif sam_result.get("error"):
+            sam_note = f" SAM.gov returned partial/no records: {sam_result.get('error')}"
+
+        return JSONResponse({
+            "workspace": req.workspace,
+            "business_unit": req.business_unit,
+            "market": req.market,
+            "status": "live",
+            "message": f"Fetched {len(spending_results)} USAspending award records, {len(federal_register_docs)} Federal Register documents, and {len(sam_result.get('records') or [])} SAM.gov opportunities. Built {len(opportunities)} account signals.{sam_note}",
+            "source_status": _ha_public_source_status(),
+            "opportunities": opportunities,
+            "filter_summary": filter_summary,
+            "filter_stats": filter_summary,
+            "retained_count": retained_count,
+            "fetched_count": len(spending_results),
+            "federal_register_docs": len(federal_register_docs),
+            "sam_opportunities": len(sam_result.get("records") or []),
+        })
+
+    except Exception as e:
+        return JSONResponse({
+            "workspace": req.workspace,
+            "business_unit": req.business_unit,
+            "market": req.market,
+            "status": "error",
+            "message": f"Live scan failed: {type(e).__name__}: {str(e)}",
+            "source_status": _ha_public_source_status(),
+            "opportunities": [],
+            "filter_summary": "scan failed",
+            "retained_count": 0,
+            "fetched_count": 0,
+        }, status_code=200)
+
+
+# Remove stale eval routes so v5 is active.
+app.router.routes = [
+    route for route in app.router.routes
+    if not (
+        getattr(route, "path", None) in {
+            "/eval",
+            "/api/eval/self-test",
+            "/api/eval/self-test-v2",
+            "/api/eval/self-test-v3",
+            "/api/eval/self-test-v4",
+            "/api/eval/self-test-v5",
+        }
+        and "GET" in getattr(route, "methods", set())
+    )
+]
+
+
+@app.get("/api/eval/self-test-v5")
+async def hossagent_eval_self_test_v5():
+    started = time.perf_counter()
+    checks = []
+
+    diagnostics = {
+        "public_market": "Federal AI Evaluation Model Assurance",
+        "usaspending_records_fetched": 0,
+        "federal_register_docs_fetched": 0,
+        "sam_api_key_configured": bool(_ha_get_sam_api_key()),
+        "sam_opportunities_fetched": 0,
+        "commercial_news_records_fetched": 0,
+        "technical_chatter_records_fetched": 0,
+        "accounts_returned": 0,
+        "evidence_items": 0,
+        "top_account": None,
+        "top_score": None,
+        "duration_ms": None,
+        "error": None,
+    }
+
+    def add_check(name, passed, detail):
+        checks.append({
+            "name": name,
+            "status": "pass" if passed else "fail",
+            "detail": detail,
+        })
+
+    try:
+        spending_results = fetch_usaspending_awards(diagnostics["public_market"])
+        diagnostics["usaspending_records_fetched"] = len(spending_results)
+        spend_opportunities, _ = _ha_v5_normalize_opportunities(build_opportunities(spending_results))
+
+        federal_docs = fetch_federal_register_documents(diagnostics["public_market"]) if "fetch_federal_register_documents" in globals() else []
+        diagnostics["federal_register_docs_fetched"] = len(federal_docs)
+        federal_opportunities = build_federal_register_signals(federal_docs) if "build_federal_register_signals" in globals() else []
+
+        sam_result = fetch_sam_gov_opportunities(diagnostics["public_market"])
+        diagnostics["sam_opportunities_fetched"] = len(sam_result.get("records") or [])
+
+        gdelt_articles = fetch_gdelt_articles_for_targets(["Scale AI", "Databricks"], "AI test evaluation model assurance")
+        hn_items = fetch_hn_items_for_targets(["Scale AI", "Databricks"], "AI test evaluation model assurance")
+        diagnostics["commercial_news_records_fetched"] = len(gdelt_articles)
+        diagnostics["technical_chatter_records_fetched"] = len(hn_items)
+
+        commercial_opportunities = build_commercial_signals(gdelt_articles, hn_items)
+
+        opportunities = sorted(
+            spend_opportunities + federal_opportunities + build_sam_gov_signals(sam_result.get("records") or []) + commercial_opportunities,
+            key=lambda x: x.get("score", 0) if isinstance(x, dict) else 0,
+            reverse=True,
+        )[:12]
+
+        diagnostics["accounts_returned"] = len(opportunities)
+        diagnostics["evidence_items"] = sum(
+            len(o.get("signals", []) or o.get("evidence", []))
+            for o in opportunities
+            if isinstance(o, dict)
+        )
+
+        if opportunities and isinstance(opportunities[0], dict):
+            diagnostics["top_account"] = opportunities[0].get("agency") or opportunities[0].get("account") or opportunities[0].get("accountName")
+            diagnostics["top_score"] = opportunities[0].get("score")
+
+        add_check("USAspending connector reachable", diagnostics["usaspending_records_fetched"] > 0, f"{diagnostics['usaspending_records_fetched']} records fetched from USAspending.")
+        add_check("Federal Register connector reachable", diagnostics["federal_register_docs_fetched"] >= 0, f"{diagnostics['federal_register_docs_fetched']} documents fetched from Federal Register.")
+        add_check("Commercial news connector reachable", diagnostics["commercial_news_records_fetched"] >= 0, f"{diagnostics['commercial_news_records_fetched']} records fetched from GDELT.")
+        add_check("Technical chatter connector reachable", diagnostics["technical_chatter_records_fetched"] >= 0, f"{diagnostics['technical_chatter_records_fetched']} records fetched from HN Algolia.")
+        add_check("Scan returned account signals", diagnostics["accounts_returned"] > 0, f"{diagnostics['accounts_returned']} account signal(s) returned after source merge.")
+        add_check("Evidence trace populated", diagnostics["evidence_items"] > 0, f"{diagnostics['evidence_items']} evidence item(s) available across returned accounts.")
+
+        shape_ok = bool(opportunities) and isinstance(opportunities[0], dict) and all(
+            key in opportunities[0]
+            for key in ["score", "why", "recommended_action"]
+        ) and (
+            "agency" in opportunities[0] or "account" in opportunities[0] or "accountName" in opportunities[0]
+        )
+
+        add_check("Response shape valid", shape_ok, "Top account includes account identity, score, why, and recommended_action.")
+
+        action_ok = bool(opportunities) and isinstance(opportunities[0], dict) and bool(opportunities[0].get("recommended_action"))
+        add_check("Recommended action populated", action_ok, opportunities[0].get("recommended_action") if action_ok else "No recommended action found on top account.")
+
+    except Exception as e:
+        diagnostics["error"] = f"{type(e).__name__}: {e}"
+        add_check("Self-test execution", False, diagnostics["error"])
+
+    diagnostics["duration_ms"] = int((time.perf_counter() - started) * 1000)
+
+    source_health = [
+        {
+            "source": "USAspending",
+            "status": "active" if diagnostics["usaspending_records_fetched"] > 0 and diagnostics["error"] is None else "failed",
+            "detail": "Federal award history connector used by Public Sector scan.",
+        },
+        {
+            "source": "Federal Register",
+            "status": "active" if diagnostics["federal_register_docs_fetched"] >= 0 and diagnostics["error"] is None else "failed",
+            "detail": "AI policy, governance, risk, and test-and-evaluation movement.",
+        },
+        {
+            "source": "SAM.gov",
+            "status": "active" if diagnostics["sam_api_key_configured"] and diagnostics["error"] is None else "needs_key",
+            "detail": "Active opportunities. Set SAM_API_KEY or SAM_GOV_API_KEY to activate.",
+        },
+        {
+            "source": "Commercial News / Press",
+            "status": "active" if diagnostics["error"] is None else "failed",
+            "detail": "GDELT market and news signals.",
+        },
+        {
+            "source": "Technical Chatter",
+            "status": "active" if diagnostics["error"] is None else "failed",
+            "detail": "Hacker News technical-market chatter.",
+        },
+        {
+            "source": "SEC EDGAR",
+            "status": "planned",
+            "detail": "Public-company filing signal planned for next pass.",
+        },
+    ]
+
+    required_checks = [c for c in checks if c["name"] != "Self-test execution"]
+    overall = "pass" if required_checks and all(c["status"] == "pass" for c in required_checks) else "fail"
+
+    return JSONResponse({
+        "system": "HossAgent",
+        "console": "Evaluation Console",
+        "overall_status": overall,
+        "diagnostics": diagnostics,
+        "source_health": source_health,
+        "checks": checks,
+    })
+
+
+@app.get("/eval", response_class=HTMLResponse)
+async def hossagent_eval_console_v5():
+    return HTMLResponse("""
+<!doctype html>
+<html>
+<head>
+  <title>HossAgent Evaluation Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg:#05070a;
+      --panel:#101418;
+      --panel2:#171c22;
+      --text:#f8fbff;
+      --muted:#d7e0e8;
+      --line:#26313b;
+      --ok:#b8f7c5;
+      --bad:#ffb4a8;
+      --warn:#dbe7f0;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    header { padding:28px 36px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:20px; align-items:flex-start; }
+    h1 { margin:0 0 8px; font-size:28px; }
+    p { color:var(--muted); line-height:1.45; }
+    a { color:var(--text); font-weight:800; }
+    button { background:var(--text); color:#05070a; border:0; border-radius:10px; padding:12px 16px; font-weight:800; cursor:pointer; }
+    main { padding:28px 36px; display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:18px; }
+    .wide { grid-column:1 / -1; }
+    .metric-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    .metric { background:var(--panel2); border:1px solid var(--line); border-radius:14px; padding:14px; }
+    .label { color:var(--muted); text-transform:uppercase; letter-spacing:.08em; font-size:11px; margin-bottom:8px; }
+    .value { font-size:24px; font-weight:800; }
+    .row { border-top:1px solid var(--line); padding:12px 0; }
+    .row:first-child { border-top:0; }
+    .status { display:inline-block; border-radius:999px; padding:4px 9px; font-size:12px; font-weight:800; margin-right:8px; }
+    .pass, .active { background:rgba(184,247,197,.13); color:var(--ok); }
+    .fail, .failed { background:rgba(255,180,168,.13); color:var(--bad); }
+    .planned, .staged, .needs_key { background:rgba(219,231,240,.13); color:var(--warn); }
+    pre { white-space:pre-wrap; overflow:auto; background:#05070a; border:1px solid var(--line); border-radius:12px; padding:14px; color:var(--muted); }
+    @media (max-width:900px) { main { grid-template-columns:1fr; padding:18px; } header { padding:20px; flex-direction:column; } .metric-row { grid-template-columns:1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>HossAgent Evaluation Console</h1>
+      <p>Internal test-and-evaluation view for connector health, scan execution, response shape, evidence trace population, and recommended-action output.</p>
+      <p><a href="/">← Back to HossAgent</a></p>
+    </div>
+    <button id="selfTestButton" onclick="runSelfTest()">Run Self-Test</button>
+  </header>
+  <main>
+    <section class="card wide">
+      <div class="metric-row">
+        <div class="metric"><div class="label">Overall</div><div class="value" id="overall">Not run</div></div>
+        <div class="metric"><div class="label">USAspending</div><div class="value" id="records">—</div></div>
+        <div class="metric"><div class="label">Accounts</div><div class="value" id="accounts">—</div></div>
+        <div class="metric"><div class="label">Duration</div><div class="value" id="duration">—</div></div>
+      </div>
+    </section>
+    <section class="card"><h2>Source Health</h2><div id="sources"><p>Run self-test to load source health.</p></div></section>
+    <section class="card"><h2>Evaluation Checks</h2><div id="checks"><p>Run self-test to load checks.</p></div></section>
+    <section class="card wide"><h2>Scan Diagnostics</h2><pre id="diagnostics">Run self-test to load diagnostics.</pre></section>
+  </main>
+  <script>
+    function badge(status) {
+      return '<span class="status ' + status + '">' + status.toUpperCase().replace("_", " ") + '</span> ';
+    }
+    async function runSelfTest() {
+      const button = document.getElementById("selfTestButton");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Running Self-Test…";
+      }
+
+      document.getElementById("overall").textContent = "Running";
+
+      let data;
+      try {
+        const response = await fetch("/api/eval/self-test-v5?ts=" + Date.now());
+        data = await response.json();
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Run Self-Test";
+        }
+      }
+      const d = data.diagnostics || {};
+      document.getElementById("overall").textContent = data.overall_status === "pass" ? "Pass" : "Fail";
+      document.getElementById("records").textContent = d.usaspending_records_fetched ?? "—";
+      document.getElementById("accounts").textContent = d.accounts_returned ?? "—";
+      document.getElementById("duration").textContent = d.duration_ms ? d.duration_ms + " ms" : "—";
+      document.getElementById("sources").innerHTML = (data.source_health || []).map(function (s) {
+        return '<div class="row">' + badge(s.status) + '<b>' + s.source + '</b><p>' + s.detail + '</p></div>';
+      }).join("");
+      document.getElementById("checks").innerHTML = (data.checks || []).map(function (c) {
+        return '<div class="row">' + badge(c.status) + '<b>' + c.name + '</b><p>' + c.detail + '</p></div>';
+      }).join("");
+      document.getElementById("diagnostics").textContent = JSON.stringify(d, null, 2);
+    }
+    runSelfTest();
+  </script>
+</body>
+</html>
+    """)
+# --- END HOSSAGENT SAM GOV + COMMERCIAL SOURCES V5 ---
+

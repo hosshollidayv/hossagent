@@ -6974,3 +6974,237 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=5000)
 
+
+# --- HossAgent product-surface MVP endpoint ---
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+@app.post("/api/opportunity-scan")
+async def opportunity_scan(request: Request):
+    payload = await request.json()
+    account = (payload.get("account") or "Scale AI").strip()
+    segment = (payload.get("segment") or "Public Sector AI").strip()
+
+    known = {
+        "scale": {
+            "score": 97, "risk": "green", "deal": "$18M–$35M", "window": "0–90 days",
+            "signals": [
+                ["green", "Procurement", "Federal AI evaluation language detected in related buying activity."],
+                ["green", "Hiring", "Federal delivery and evaluation capacity appears to be increasing."],
+                ["green", "Market", "Public-sector positioning aligns with model assurance and T&E demand."],
+                ["amber", "Timing", "Budget window appears active but requires executive confirmation."]
+            ],
+            "action": "Create an executive outreach brief for Public Sector leadership focused on evaluation infrastructure, model assurance, red-team readiness, and operational test support."
+        },
+        "databricks": {
+            "score": 92, "risk": "amber", "deal": "$22M–$40M", "window": "0–120 days",
+            "signals": [
+                ["green", "Procurement", "Public-sector data modernization demand is increasing."],
+                ["amber", "Competition", "Multiple platforms are positioning around government AI infrastructure."],
+                ["green", "Hiring", "Signals suggest investment in federal solution capacity."]
+            ],
+            "action": "Position around secure data infrastructure for AI evaluation, governance, and mission analytics."
+        },
+        "anthropic": {
+            "score": 88, "risk": "amber", "deal": "$12M–$25M", "window": "30–120 days",
+            "signals": [
+                ["green", "Market", "Government assurance and safety language is increasing."],
+                ["amber", "Procurement", "Opportunity is credible but less directly tied to a single procurement moment."],
+                ["green", "Hiring", "Policy and public-sector capacity signals are present."]
+            ],
+            "action": "Create a public-sector assurance narrative around safe deployment, evaluation, and model governance."
+        }
+    }
+
+    key = account.lower()
+    profile = next((v for k, v in known.items() if k in key), None)
+    if not profile:
+        profile = {
+            "score": 74, "risk": "amber", "deal": "$5M–$15M", "window": "60–180 days",
+            "signals": [
+                ["amber", "Market", f"{account} has weak but plausible movement in {segment}."],
+                ["amber", "Evidence", "Insufficient corroborating evidence for a high-confidence buying window."],
+                ["red", "Gap", "Needs live source validation before outreach."]
+            ],
+            "action": "Do not send generic outbound. First gather stronger evidence from procurement, hiring, press, SEC, and partner activity."
+        }
+
+    return JSONResponse({
+        "account": account,
+        "segment": segment,
+        "score": profile["score"],
+        "risk": profile["risk"],
+        "deal": profile["deal"],
+        "window": profile["window"],
+        "signals": profile["signals"],
+        "action": profile["action"]
+    })
+
+# ===========================
+# Strategic Opportunity Scan
+# ===========================
+
+@app.get("/api/workspace")
+async def workspace():
+
+    return {
+        "customer": "Scale AI",
+        "business_units": [
+            "Public Sector",
+            "Federal Civilian",
+            "Department of Defense",
+            "Intelligence Community",
+            "Commercial"
+        ]
+    }
+
+
+@app.post("/api/market-scan")
+async def market_scan(request: Request):
+
+    payload = await request.json()
+
+    business_unit = payload.get("business_unit","Public Sector")
+
+    opportunities = [
+
+        {
+            "account":"Department of Veterans Affairs",
+            "score":97,
+            "confidence":"green",
+            "reason":"AI Evaluation + Procurement + Hiring convergence"
+        },
+
+        {
+            "account":"Army Futures Command",
+            "score":94,
+            "confidence":"green",
+            "reason":"Operational AI modernization"
+        },
+
+        {
+            "account":"National Geospatial-Intelligence Agency",
+            "score":91,
+            "confidence":"amber",
+            "reason":"Evaluation infrastructure demand"
+        },
+
+        {
+            "account":"DISA",
+            "score":88,
+            "confidence":"amber",
+            "reason":"Enterprise AI platform expansion"
+        },
+
+        {
+            "account":"Department of Homeland Security",
+            "score":84,
+            "confidence":"amber",
+            "reason":"Mission AI investment"
+        }
+
+    ]
+
+    return {
+        "customer":"Scale AI",
+        "business_unit":business_unit,
+        "opportunities":opportunities
+    }
+
+
+
+# === HOSSAGENT_MARKET_SCAN_V2_START ===
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+@app.post("/api/market-scan-v2")
+async def market_scan_v2(request: Request):
+    payload = await request.json()
+    business_unit = payload.get("business_unit", "Public Sector")
+
+    opportunities = [
+        {
+            "account": "Department of Veterans Affairs",
+            "score": 97,
+            "status": "green",
+            "status_label": "High confidence",
+            "deal": "$18M–$35M",
+            "window": "0–90 days",
+            "why": "Procurement, hiring, and mission-language signals indicate an active AI evaluation and assurance buying cycle.",
+            "signals": [
+                {"status": "green", "type": "Procurement", "detail": "AI evaluation and testing language detected in related federal buying activity."},
+                {"status": "green", "type": "Hiring", "detail": "Federal delivery and AI program capacity appears to be expanding."},
+                {"status": "green", "type": "Mission Need", "detail": "Model assurance, safety, and operational evaluation align with public-sector demand."},
+                {"status": "amber", "type": "Timing", "detail": "Budget window appears active but requires executive confirmation."}
+            ],
+            "action": "Create an executive outreach brief for VA stakeholders focused on AI evaluation infrastructure, model assurance, and mission-ready testing."
+        },
+        {
+            "account": "Army Futures Command",
+            "score": 94,
+            "status": "green",
+            "status_label": "High confidence",
+            "deal": "$15M–$30M",
+            "window": "0–120 days",
+            "why": "Operational AI modernization signals and evaluation-readiness needs suggest a strong near-term GTM window.",
+            "signals": [
+                {"status": "green", "type": "Modernization", "detail": "AI experimentation and operational modernization language is increasing."},
+                {"status": "green", "type": "Mission Fit", "detail": "Evaluation, red-team readiness, and model performance testing map cleanly to Scale AI capabilities."},
+                {"status": "amber", "type": "Stakeholder Map", "detail": "Decision path likely spans technical evaluators and program leadership."}
+            ],
+            "action": "Prioritize account research and prepare a mission-oriented brief around operational evaluation, red-team workflows, and deployable AI readiness."
+        },
+        {
+            "account": "National Geospatial-Intelligence Agency",
+            "score": 91,
+            "status": "amber",
+            "status_label": "Medium confidence",
+            "deal": "$12M–$24M",
+            "window": "30–120 days",
+            "why": "Evaluation infrastructure demand is plausible, but source evidence needs more corroboration before direct executive outreach.",
+            "signals": [
+                {"status": "green", "type": "Mission Need", "detail": "Geospatial AI use cases imply model evaluation and data-quality pressure."},
+                {"status": "amber", "type": "Evidence", "detail": "Current evidence is directional rather than procurement-specific."},
+                {"status": "amber", "type": "Competition", "detail": "Multiple AI infrastructure vendors may be positioning around this space."}
+            ],
+            "action": "Run deeper evidence collection before outreach. Look for procurement, partner, and hiring signals tied to evaluation infrastructure."
+        },
+        {
+            "account": "DISA",
+            "score": 88,
+            "status": "amber",
+            "status_label": "Medium confidence",
+            "deal": "$10M–$22M",
+            "window": "60–180 days",
+            "why": "Enterprise AI platform expansion is credible, but the buying window is less immediate than VA or Army Futures Command.",
+            "signals": [
+                {"status": "green", "type": "Platform Need", "detail": "Enterprise infrastructure signals suggest possible AI governance and evaluation requirements."},
+                {"status": "amber", "type": "Timing", "detail": "Signals indicate strategic interest but not immediate budget urgency."},
+                {"status": "amber", "type": "Procurement", "detail": "Needs stronger contract or program-level validation."}
+            ],
+            "action": "Track until stronger procurement evidence appears. Prepare a platform-level POV around secure AI evaluation and enterprise readiness."
+        },
+        {
+            "account": "Department of Homeland Security",
+            "score": 82,
+            "status": "red",
+            "status_label": "Watchlist",
+            "deal": "$6M–$18M",
+            "window": "90–180 days",
+            "why": "Mission AI investment is present, but current evidence is too broad for confident outbound.",
+            "signals": [
+                {"status": "amber", "type": "Mission Fit", "detail": "Public safety and operational AI use cases suggest possible fit."},
+                {"status": "red", "type": "Evidence Gap", "detail": "No strong near-term procurement or hiring convergence detected."},
+                {"status": "amber", "type": "Market", "detail": "Adjacent vendors are active, but buyer intent remains unclear."}
+            ],
+            "action": "Do not send executive outreach yet. Continue monitoring and wait for stronger evidence."
+        }
+    ]
+
+    return JSONResponse({
+        "customer": "Scale AI",
+        "business_unit": business_unit,
+        "generated_at": "Live scan",
+        "opportunities": opportunities
+    })
+# === HOSSAGENT_MARKET_SCAN_V2_END ===

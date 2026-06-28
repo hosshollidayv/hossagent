@@ -42,3 +42,6 @@ email_attempts.json
 email_hourly_counter.json
 lead_source_log.json
 bizdev_template_log.json
+.hossagent.secrets
+.env.local
+*.secrets

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HossAgent — Strategic Opportunity Intelligence</title>
+</head>
+<body style="margin:0;background:#070b12;color:#f8fafc;font-family:Inter,system-ui,sans-serif;">
+  <main style="max-width:1180px;margin:0 auto;padding:40px 24px;">
+    <h1 style="font-size:44px;letter-spacing:-.04em;margin:0;">HossAgent</h1>
+    <p style="color:#94a3b8;font-size:18px;margin-top:10px;">Strategic Opportunity Intelligence for enterprise AI GTM teams.</p>
+
+    <section style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:34px 0;">
+      <div style="background:#0f172a;border:1px solid #1e293b;border-radius:18px;padding:20px;"><b style="font-size:30px;">97</b><p>Top Opportunity Score</p></div>
+      <div style="background:#0f172a;border:1px solid #1e293b;border-radius:18px;padding:20px;"><b style="font-size:30px;">14</b><p>Active Buying Signals</p></div>
+      <div style="background:#0f172a;border:1px solid #1e293b;border-radius:18px;padding:20px;"><b style="font-size:30px;">$28M</b><p>Estimated Expansion</p></div>
+      <div style="background:#0f172a;border:1px solid #1e293b;border-radius:18px;padding:20px;"><b style="font-size:30px;">High</b><p>Confidence</p></div>
+    </section>
+
+    <section style="background:#0f172a;border:1px solid #1e293b;border-radius:24px;padding:28px;margin-bottom:22px;">
+      <p style="color:#38bdf8;text-transform:uppercase;letter-spacing:.12em;font-size:12px;font-weight:700;">Priority Account</p>
+      <h2 style="font-size:34px;margin:6px 0;">Scale AI — Public Sector</h2>
+      <p style="color:#cbd5e1;font-size:17px;line-height:1.7;max-width:850px;">Converging evidence suggests an active federal AI evaluation and test infrastructure buying cycle. HossAgent detected procurement, hiring, partnership, and public-sector positioning signals that indicate a near-term GTM window.</p>
+    </section>
+
+    <section style="display:grid;grid-template-columns:1fr 1fr;gap:22px;">
+      <div style="background:#0f172a;border:1px solid #1e293b;border-radius:24px;padding:24px;">
+        <h3>Live Signals</h3>
+        <ul style="color:#cbd5e1;line-height:2;">
+          <li>Federal AI evaluation demand increasing</li>
+          <li>Public-sector hiring velocity spike</li>
+          <li>Defense customer language appearing across market</li>
+          <li>Procurement window likely inside 90 days</li>
+        </ul>
+      </div>
+      <div style="background:#0f172a;border:1px solid #1e293b;border-radius:24px;padding:24px;">
+        <h3>Recommended GTM Action</h3>
+        <p style="color:#cbd5e1;line-height:1.7;">Prioritize executive outreach to Public Sector leadership. Lead with evaluation infrastructure, model assurance, and operational test readiness. Attach evidence summary and recommended account narrative.</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
