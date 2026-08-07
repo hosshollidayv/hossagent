@@ -23,6 +23,7 @@ Subscription Model:
 - Paid: $99/month, unlimited access
 """
 import asyncio
+import html as html_stdlib
 import json
 import os
 import secrets
@@ -78,6 +79,7 @@ from analytics import (
     track_page_view, track_funnel_event, track_event,
     EventType, get_analytics_summary, get_page_view_stats, get_funnel_stats
 )
+from product_demos import get_product_demo, serialize_product_demo
 
 def get_ga_script() -> str:
     """Generate Google Analytics 4 script tag if measurement ID is configured."""
@@ -136,6 +138,9 @@ from auth_utils import (
 
 app = FastAPI(title="HossAgent Control Engine")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+from mission_intelligence import router as mission_intelligence_router
+app.include_router(mission_intelligence_router)
 
 DEFAULT_TIMEZONE = "America/New_York"
 
@@ -584,8 +589,11 @@ async def startup_event():
     print("[LEADS][STARTUP] HossNative (Autonomous Discovery) active")
     print("[LEADS][STARTUP] Lead discovery via SignalNet + web scraping - no external APIs")
     
-    asyncio.create_task(autopilot_loop())
-    print("[STARTUP] HossAgent initialized. Autopilot loop active.")
+    if os.getenv("DISABLE_AUTOPILOT", "FALSE").upper() == "TRUE":
+        print("[STARTUP] HossAgent initialized. Autopilot loop disabled by environment.")
+    else:
+        asyncio.create_task(autopilot_loop())
+        print("[STARTUP] HossAgent initialized. Autopilot loop active.")
 
 
 async def autopilot_loop():
@@ -722,6 +730,72 @@ def serve_mission_intelligence(request: Request):
     with open("templates/mission_intelligence.html", "r") as f:
         template = f.read()
     return template.replace("{ga_script}", get_ga_script())
+
+
+@app.get("/mission-intelligence/demo", response_class=HTMLResponse)
+def serve_mission_intelligence_demo(request: Request):
+    """Public, self-guided tour of the Mission Intelligence pilot workflow."""
+    track_page_view(
+        path="/mission-intelligence/demo",
+        referrer=request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None
+    )
+    with open("templates/mission_demo.html", "r") as f:
+        template = f.read()
+    return template.replace("{ga_script}", get_ga_script())
+
+
+@app.get("/demos", response_class=HTMLResponse)
+def serve_product_demos(request: Request):
+    """Public portfolio of self-guided HossAgent product walkthroughs."""
+    track_page_view(
+        path="/demos",
+        referrer=request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None
+    )
+    with open("templates/demos.html", "r") as f:
+        template = f.read()
+    return template.replace("{ga_script}", get_ga_script())
+
+
+@app.get("/public-sector/demo", response_class=HTMLResponse)
+@app.get("/private-sector/demo", response_class=HTMLResponse)
+@app.get("/property-intelligence/demo", response_class=HTMLResponse)
+def serve_product_demo(request: Request):
+    """Render a configured, public, self-guided product decision walkthrough."""
+    slug = request.url.path.strip("/").split("/")[0]
+    demo = get_product_demo(slug)
+    if demo is None:
+        raise HTTPException(status_code=404, detail="Product demo not found")
+    track_page_view(
+        path=request.url.path,
+        referrer=request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None
+    )
+    with open("templates/product_demo.html", "r") as f:
+        template = f.read()
+    replacements = {
+        "%%META_DESCRIPTION%%": demo["intro"],
+        "%%PRODUCT_NAME%%": demo["productName"],
+        "%%DEMO_THEME%%": demo["theme"],
+        "%%DIVISION%%": demo["division"],
+        "%%OVERVIEW_URL%%": demo["overviewUrl"],
+        "%%HEADLINE%%": demo["headline"],
+        "%%INTRO%%": demo["intro"],
+        "%%BOUNDARY%%": demo["boundary"],
+        "%%WORKSPACE%%": demo["workspace"],
+        "%%WORKSPACE_META%%": demo["workspaceMeta"],
+        "%%DEMO_CONFIG%%": serialize_product_demo(slug),
+        "{ga_script}": get_ga_script(),
+    }
+    for token, value in replacements.items():
+        if token != "%%DEMO_CONFIG%%" and token != "{ga_script}":
+            value = html_stdlib.escape(str(value), quote=True)
+        template = template.replace(token, value)
+    return template
 
 
 @app.get("/about", response_class=HTMLResponse)
@@ -874,9 +948,14 @@ def login_get(request: Request):
     elif request.query_params.get("logout") == "true":
         message_html = '<div class="success-message">You have been logged out.</div>'
     
+    next_path = request.query_params.get("next", "/portal")
+    if not next_path.startswith("/") or next_path.startswith("//"):
+        next_path = "/portal"
+    safe_next_path = html_stdlib.escape(next_path, quote=True)
     html = template.format(
         message_html=message_html,
-        email=""
+        email="",
+        next_input=f'<input type="hidden" name="next" value="{safe_next_path}">'
     )
     return html
 
@@ -885,6 +964,7 @@ def login_get(request: Request):
 def login_post(
     email: str = Form(...),
     password: str = Form(...),
+    next_path: str = Form("/portal", alias="next"),
     session: Session = Depends(get_session)
 ):
     """Process login form."""
@@ -894,17 +974,22 @@ def login_post(
     customer, error = authenticate_customer(session, email, password)
     
     if error:
+        safe_next_path = next_path if next_path.startswith("/") and not next_path.startswith("//") else "/portal"
+        safe_next_path = html_stdlib.escape(safe_next_path, quote=True)
         error_html = f'<div class="error-message">{error}</div>'
         html = template.format(
             message_html=error_html,
-            email=email
+            email=email,
+            next_input=f'<input type="hidden" name="next" value="{safe_next_path}">'
         )
         return HTMLResponse(content=html)
     
     track_funnel_event(EventType.LOGIN, customer_id=customer.id)
     
     session_token = create_customer_session(customer.id)
-    response = RedirectResponse(url="/portal", status_code=303)
+    if not next_path.startswith("/") or next_path.startswith("//"):
+        next_path = "/portal"
+    response = RedirectResponse(url=next_path, status_code=303)
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=session_token,
