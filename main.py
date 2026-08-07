@@ -135,6 +135,7 @@ from auth_utils import (
 )
 
 app = FastAPI(title="HossAgent Control Engine")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 DEFAULT_TIMEZONE = "America/New_York"
 
@@ -705,6 +706,20 @@ def serve_marketing_landing(request: Request):
         ip_address=request.client.host if request.client else None
     )
     with open("templates/marketing_landing.html", "r") as f:
+        template = f.read()
+    return template.replace("{ga_script}", get_ga_script())
+
+
+@app.get("/mission-intelligence", response_class=HTMLResponse)
+def serve_mission_intelligence(request: Request):
+    """Mission Intelligence: release-to-outcome evidence for mission software."""
+    track_page_view(
+        path="/mission-intelligence",
+        referrer=request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None
+    )
+    with open("templates/mission_intelligence.html", "r") as f:
         template = f.read()
     return template.replace("{ga_script}", get_ga_script())
 
@@ -6502,4 +6517,3 @@ def get_admin_analytics_dashboard(request: Request, session: Session = Depends(g
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=5000)
-
