@@ -79,6 +79,7 @@ from analytics import (
     track_page_view, track_funnel_event, track_event,
     EventType, get_analytics_summary, get_page_view_stats, get_funnel_stats
 )
+from product_demos import get_product_demo, serialize_product_demo
 
 def get_ga_script() -> str:
     """Generate Google Analytics 4 script tag if measurement ID is configured."""
@@ -743,6 +744,58 @@ def serve_mission_intelligence_demo(request: Request):
     with open("templates/mission_demo.html", "r") as f:
         template = f.read()
     return template.replace("{ga_script}", get_ga_script())
+
+
+@app.get("/demos", response_class=HTMLResponse)
+def serve_product_demos(request: Request):
+    """Public portfolio of self-guided HossAgent product walkthroughs."""
+    track_page_view(
+        path="/demos",
+        referrer=request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None
+    )
+    with open("templates/demos.html", "r") as f:
+        template = f.read()
+    return template.replace("{ga_script}", get_ga_script())
+
+
+@app.get("/public-sector/demo", response_class=HTMLResponse)
+@app.get("/private-sector/demo", response_class=HTMLResponse)
+@app.get("/property-intelligence/demo", response_class=HTMLResponse)
+def serve_product_demo(request: Request):
+    """Render a configured, public, self-guided product decision walkthrough."""
+    slug = request.url.path.strip("/").split("/")[0]
+    demo = get_product_demo(slug)
+    if demo is None:
+        raise HTTPException(status_code=404, detail="Product demo not found")
+    track_page_view(
+        path=request.url.path,
+        referrer=request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None
+    )
+    with open("templates/product_demo.html", "r") as f:
+        template = f.read()
+    replacements = {
+        "%%META_DESCRIPTION%%": demo["intro"],
+        "%%PRODUCT_NAME%%": demo["productName"],
+        "%%DEMO_THEME%%": demo["theme"],
+        "%%DIVISION%%": demo["division"],
+        "%%OVERVIEW_URL%%": demo["overviewUrl"],
+        "%%HEADLINE%%": demo["headline"],
+        "%%INTRO%%": demo["intro"],
+        "%%BOUNDARY%%": demo["boundary"],
+        "%%WORKSPACE%%": demo["workspace"],
+        "%%WORKSPACE_META%%": demo["workspaceMeta"],
+        "%%DEMO_CONFIG%%": serialize_product_demo(slug),
+        "{ga_script}": get_ga_script(),
+    }
+    for token, value in replacements.items():
+        if token != "%%DEMO_CONFIG%%" and token != "{ga_script}":
+            value = html_stdlib.escape(str(value), quote=True)
+        template = template.replace(token, value)
+    return template
 
 
 @app.get("/about", response_class=HTMLResponse)
