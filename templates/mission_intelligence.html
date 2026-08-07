@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="HossAgent Mission Intelligence connects software releases to operator workflows, mission outcomes, and defensible product decisions.">
+  <title>Mission Intelligence — HossAgent</title>
+  {ga_script}
+  <link rel="stylesheet" href="/static/web.css">
+</head>
+<body class="mission-body">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="HossAgent home"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span><span class="brand-division">Mission Intelligence</span></a>
+    <nav class="site-nav mission-nav" aria-label="Mission Intelligence navigation"><a href="#capability">Capability</a><a href="#evidence">Evidence workspace</a><a href="#governance">Governance</a></nav>
+    <div class="header-actions"><a class="text-link" href="/">All products</a><a class="button button-small" href="/request-access">Request pilot</a></div>
+  </header>
+
+  <main id="main">
+    <section class="mission-hero">
+      <div class="mission-hero-copy">
+        <p class="eyebrow">Public Sector / Mission Software</p>
+        <h1>Know whether the software made the mission better.</h1>
+        <p class="hero-lede">Connect release state, operator behavior, workflow performance, mission outcomes, and evidence provenance—without surrendering control of the data or the decision.</p>
+        <div class="hero-actions"><a class="button" href="#evidence">Explore the evidence workspace <span aria-hidden="true">↓</span></a><a class="button button-ghost" href="/request-access">Request a design-partner pilot</a></div>
+        <div class="mission-constraints"><span><b>Local-first</b> deployment</span><span><b>Human-owned</b> decisions</span><span><b>Guardrail-led</b> evaluation</span></div>
+      </div>
+      <div class="mission-chain" aria-label="Mission Intelligence decision chain">
+        <div class="chain-header"><span>Decision chain</span><span class="live-dot">Evidence linked</span></div>
+        <ol><li><span>01</span><div><strong>Release</strong><p>Version, model, configuration, feature state.</p></div></li><li><span>02</span><div><strong>Exposure</strong><p>Who received the change and under what assignment.</p></div></li><li><span>03</span><div><strong>Workflow</strong><p>Delay, rework, overrides, and cohort differences.</p></div></li><li><span>04</span><div><strong>Outcome</strong><p>Effectiveness measured against explicit guardrails.</p></div></li><li class="chain-accent"><span>05</span><div><strong>Decision</strong><p>Expand, modify, stop, or collect more evidence.</p></div></li></ol>
+      </div>
+    </section>
+
+    <section class="section mission-capability" id="capability" aria-labelledby="capability-title">
+      <div class="section-intro"><p class="eyebrow">Mission workflow evidence</p><h2 id="capability-title">A decision layer above raw telemetry.</h2><p>HossAgent does not replace observability or formal test. It completes the chain from deployed change to mission-relevant decision.</p></div>
+      <div class="capability-grid"><article><span>01</span><h3>Mission event contract</h3><p>Capture the minimum workflow, exposure, outcome, and guardrail events with explicit semantics.</p></article><article><span>02</span><h3>Workflow explorer</h3><p>See paths, delays, abandonment, rework, overrides, and cohort differences.</p></article><article><span>03</span><h3>Release evidence</h3><p>Bind each result to the active version, configuration, model, and assignment method.</p></article><article><span>04</span><h3>Evidence brief</h3><p>Generate a reproducible decision artifact with claim boundaries and provenance.</p></article></div>
+    </section>
+
+    <section class="evidence-section" id="evidence" aria-labelledby="evidence-title">
+      <div class="evidence-intro"><div><p class="eyebrow">Interactive evidence workspace</p><h2 id="evidence-title">Threat-triage release 2.4.1</h2><p>Did the revised recommendation explanation improve the workflow without creating unacceptable risk?</p></div><div class="synthetic-stamp">Synthetic exercise data</div></div>
+
+      <div class="evidence-toolbar">
+        <div class="cohort-switch" role="group" aria-label="Operator cohort"><button class="active" data-cohort="all">All operators <span>204</span></button><button data-cohort="certified">Certified <span>118</span></button><button data-cohort="trainee">Trainee <span>86</span></button></div>
+        <div class="evidence-health"><span class="health-dot"></span>97.8% complete <span>Exercise ALPHA-07</span></div>
+      </div>
+
+      <div class="metric-grid">
+        <article><span>Median triage time <b>Primary</b></span><strong id="metric-time">42s</strong><p><em id="metric-time-delta">−21%</em> vs control</p></article>
+        <article><span>Correct disposition <b>Outcome</b></span><strong id="metric-accuracy">94.1%</strong><p><em id="metric-accuracy-delta">+1.8 pts</em> vs control</p></article>
+        <article id="escalation-card"><span>False escalation <b>Guardrail</b></span><strong id="metric-escalation">8.7%</strong><p><em id="metric-escalation-delta" class="warn">+2.1 pts</em> threshold 10%</p></article>
+        <article id="reversal-card"><span>Override reversal <b>Guardrail</b></span><strong id="metric-reversal">6.2%</strong><p><em id="metric-reversal-delta" class="warn">+1.5 pts</em> vs control</p></article>
+      </div>
+
+      <div class="evidence-grid">
+        <article class="evidence-panel workflow-card">
+          <div class="evidence-panel-head"><div><p class="eyebrow">Workflow explorer</p><h3>Alert to handoff</h3></div><span>Median elapsed time</span></div>
+          <div class="workflow-chain"><div><span>01</span><p>Alert presented</p><strong>0s</strong></div><i></i><div><span>02</span><p>Track inspected</p><strong id="step-one">+9s</strong></div><i></i><div><span>03</span><p>Recommendation</p><strong id="step-two">+17s</strong></div><i></i><div class="focus-step"><span>04</span><p>Disposition</p><strong id="step-three">+42s</strong></div><i></i><div><span>05</span><p>Handoff</p><strong id="step-four">+64s</strong></div></div>
+          <div class="cohort-bars"><div><span>Certified · control</span><i><b style="width:72%"></b></i><strong>46s</strong></div><div><span>Certified · v2</span><i><b class="treatment" style="width:52%"></b></i><strong>33s</strong></div><div><span>Trainee · control</span><i><b style="width:100%"></b></i><strong>64s</strong></div><div><span>Trainee · v2</span><i><b class="caution" style="width:84%"></b></i><strong>54s</strong></div></div>
+        </article>
+
+        <article class="evidence-panel decision-card" id="decision-card">
+          <div class="decision-label"><span>Recommended action</span><span id="decision-status"><i></i>Cohort risk</span></div>
+          <h3 id="decision-title">Retain v2 for certified operators.</h3>
+          <p id="decision-copy">Revise the explanation and training before broader exposure. Trainee false escalations crossed the agreed guardrail.</p>
+          <div class="review-condition"><span>Next review condition</span><strong id="review-condition">60 eligible trainee runs after intervention</strong></div>
+          <button class="button button-light" id="brief-button">Generate evidence brief <span aria-hidden="true">→</span></button>
+        </article>
+
+        <article class="evidence-panel guardrail-card">
+          <div class="evidence-panel-head"><div><p class="eyebrow">Safety &amp; validity</p><h3>Guardrail review</h3></div></div>
+          <div class="guardrail-list"><div class="guardrail-head"><span>Measure</span><span>Threshold</span><span>Observed</span><span>Status</span></div><div><span>Critical-alert misses</span><span>≤ control +0.5 pt</span><strong>−0.2 pt</strong><em class="healthy">Healthy</em></div><div><span>False escalation</span><span>≤ 10%</span><strong id="guardrail-escalation">8.7%</strong><em id="guardrail-status" class="watch">Cohort risk</em></div><div><span>P95 app latency</span><span>≤ 400 ms</span><strong>286 ms</strong><em class="healthy">Healthy</em></div><div><span>Event completeness</span><span>≥ 95%</span><strong>97.8%</strong><em class="healthy">Healthy</em></div></div>
+        </article>
+
+        <article class="evidence-panel lineage-card"><div class="evidence-panel-head"><div><p class="eyebrow">Evidence lineage</p><h3>Reproduce this conclusion</h3></div><span class="signed">Locally signed</span></div><div class="lineage-items"><div><span>Application release</span><strong>2.4.1+e73f</strong><small>Immutable manifest</small></div><div><span>Feature assignment</span><strong>triage-v2</strong><small>Run-level stratification</small></div><div><span>Outcome source</span><strong>Adjudication rev. 3</strong><small>Independent test owner</small></div><div><span>Analysis definition</span><strong>HA-EVAL-007 r2</strong><small>Frozen before run 1</small></div></div></article>
+      </div>
+      <p class="prototype-note"><strong>Prototype boundary:</strong> All figures are fictional and synthetic. This page demonstrates the product decision workflow; it does not claim real operational performance.</p>
+    </section>
+
+    <section class="section governance-section" id="governance" aria-labelledby="governance-title">
+      <div class="section-intro"><p class="eyebrow">Governance by design</p><h2 id="governance-title">Instrument the workflow. Protect the operator.</h2><p>Collection is purpose-limited, pseudonymous by default, locally governed, and prohibited from individual personnel ranking.</p></div>
+      <div class="governance-grid"><div><strong>Collect</strong><p>Workflow state, release exposure, adjudicated outcome, and defined guardrails.</p></div><div><strong>Minimize</strong><p>No raw keystrokes, screen replay, payload content, or precise location by default.</p></div><div><strong>Separate</strong><p>The recorded UI action is not treated as proof that the task was completed correctly.</p></div><div><strong>Retain authority</strong><p>HossAgent recommends. The named mission, test, and product owners decide.</p></div></div>
+    </section>
+
+    <section class="cta-section mission-cta" aria-labelledby="mission-cta-title"><div><p class="eyebrow">One workflow. One release. One decision.</p><h2 id="mission-cta-title">Prove the wedge in a training or exercise environment.</h2></div><a class="button button-light" href="/request-access">Request a design-partner pilot <span aria-hidden="true">→</span></a></section>
+  </main>
+
+  <footer class="site-footer"><a class="brand brand-footer" href="/"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span></a><nav aria-label="Footer navigation"><a href="/">All products</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/request-access">Contact</a></nav><p>Evidence in. Operator action out.</p></footer>
+
+  <div class="brief-backdrop" id="brief-modal" hidden>
+    <section class="brief-dialog" role="dialog" aria-modal="true" aria-labelledby="brief-title">
+      <div class="brief-dialog-head"><div><p class="eyebrow">Decision artifact</p><h2 id="brief-title">Release evidence brief</h2></div><button id="brief-close" aria-label="Close evidence brief">×</button></div>
+      <div class="brief-tags"><span>EXERCISE ALPHA-07</span><span>RELEASE 2.4.1</span><span id="brief-cohort">ALL OPERATORS</span></div>
+      <div class="brief-recommendation"><span class="health-dot"></span><div><small>Recommended action</small><strong id="brief-decision">Retain v2 for certified operators.</strong><p id="brief-basis">Revise the explanation and training before broader exposure.</p></div></div>
+      <div class="brief-metrics"><div><span>Median triage</span><strong id="brief-time">42s</strong></div><div><span>Correct disposition</span><strong id="brief-accuracy">94.1%</strong></div><div><span>False escalation</span><strong id="brief-escalation">8.7%</strong></div></div>
+      <div class="claim-boundary"><strong>Claim boundary</strong><p>These synthetic results support a decision only for the defined exercise, release, cohorts, and adjudication method. They do not establish performance in live operations.</p></div>
+      <button class="button" id="brief-copy">Copy decision summary</button>
+    </section>
+  </div>
+
+  <script>
+    const cohorts = {
+      all: { label: "ALL OPERATORS", time: "42s", timeDelta: "−21%", accuracy: "94.1%", accuracyDelta: "+1.8 pts", escalation: "8.7%", escalationDelta: "+2.1 pts", reversal: "6.2%", reversalDelta: "+1.5 pts", steps: [9,17,42,64], title: "Retain v2 for certified operators.", copy: "Revise the explanation and training before broader exposure. Trainee false escalations crossed the agreed guardrail.", review: "60 eligible trainee runs after intervention", status: "Cohort risk", tone: "watch" },
+      certified: { label: "CERTIFIED", time: "33s", timeDelta: "−28%", accuracy: "97.2%", accuracyDelta: "+2.4 pts", escalation: "4.8%", escalationDelta: "−0.6 pts", reversal: "3.1%", reversalDelta: "−0.4 pts", steps: [7,13,33,51], title: "Continue controlled v2 exposure.", copy: "All preregistered guardrails remained healthy for certified operators. Confirm durability across scenario classes.", review: "80 additional eligible runs", status: "Guardrails healthy", tone: "healthy" },
+      trainee: { label: "TRAINEE", time: "54s", timeDelta: "−16%", accuracy: "89.6%", accuracyDelta: "+0.4 pts", escalation: "13.4%", escalationDelta: "+5.2 pts", reversal: "10.8%", reversalDelta: "+4.6 pts", steps: [13,24,54,81], title: "Do not expand v2 to trainees.", copy: "The speed improvement did not offset false-escalation and reversal risk. Revise the explanation and pair it with a training intervention.", review: "60 eligible trainee runs after intervention", status: "Threshold crossed", tone: "breach" }
+    };
+    let activeCohort = "all";
+    const byId = (id) => document.getElementById(id);
+    const updateCohort = (key) => {
+      activeCohort = key;
+      const d = cohorts[key];
+      document.querySelectorAll("[data-cohort]").forEach((button) => button.classList.toggle("active", button.dataset.cohort === key));
+      [["metric-time",d.time],["metric-time-delta",d.timeDelta],["metric-accuracy",d.accuracy],["metric-accuracy-delta",d.accuracyDelta],["metric-escalation",d.escalation],["metric-escalation-delta",d.escalationDelta],["metric-reversal",d.reversal],["metric-reversal-delta",d.reversalDelta],["decision-title",d.title],["decision-copy",d.copy],["review-condition",d.review],["guardrail-escalation",d.escalation],["guardrail-status",d.status],["brief-cohort",d.label],["brief-decision",d.title],["brief-basis",d.copy],["brief-time",d.time],["brief-accuracy",d.accuracy],["brief-escalation",d.escalation]].forEach(([id,value]) => byId(id).textContent = value);
+      d.steps.forEach((value,index) => byId(["step-one","step-two","step-three","step-four"][index]).textContent = `+${value}s`);
+      byId("decision-status").className = d.tone;
+      byId("decision-status").innerHTML = `<i></i>${d.status}`;
+      byId("guardrail-status").className = d.tone;
+      byId("decision-card").className = `evidence-panel decision-card ${d.tone}`;
+      byId("escalation-card").classList.toggle("metric-breach", key === "trainee");
+      byId("reversal-card").classList.toggle("metric-breach", key === "trainee");
+    };
+    document.querySelectorAll("[data-cohort]").forEach((button) => button.addEventListener("click", () => updateCohort(button.dataset.cohort)));
+    const modal = byId("brief-modal");
+    byId("brief-button").addEventListener("click", () => { modal.hidden = false; byId("brief-close").focus(); });
+    byId("brief-close").addEventListener("click", () => { modal.hidden = true; byId("brief-button").focus(); });
+    modal.addEventListener("click", (event) => { if (event.target === modal) { modal.hidden = true; byId("brief-button").focus(); } });
+    document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !modal.hidden) { modal.hidden = true; byId("brief-button").focus(); } });
+    byId("brief-copy").addEventListener("click", async () => {
+      const d = cohorts[activeCohort];
+      const summary = `HossAgent Mission Intelligence — Exercise ALPHA-07\nCohort: ${d.label}\nMedian triage: ${d.time} (${d.timeDelta})\nCorrect disposition: ${d.accuracy} (${d.accuracyDelta})\nFalse escalation: ${d.escalation} (${d.escalationDelta})\nDecision: ${d.title}\nBasis: ${d.copy}\n\nSynthetic demonstration data. Not an operational finding.`;
+      await navigator.clipboard.writeText(summary);
+      byId("brief-copy").textContent = "Copied";
+      setTimeout(() => byId("brief-copy").textContent = "Copy decision summary", 1600);
+    });
+  </script>
+</body>
+</html>
