@@ -731,6 +731,20 @@ def serve_mission_intelligence(request: Request):
     return template.replace("{ga_script}", get_ga_script())
 
 
+@app.get("/mission-intelligence/demo", response_class=HTMLResponse)
+def serve_mission_intelligence_demo(request: Request):
+    """Public, self-guided tour of the Mission Intelligence pilot workflow."""
+    track_page_view(
+        path="/mission-intelligence/demo",
+        referrer=request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None
+    )
+    with open("templates/mission_demo.html", "r") as f:
+        template = f.read()
+    return template.replace("{ga_script}", get_ga_script())
+
+
 @app.get("/about", response_class=HTMLResponse)
 def serve_about_page():
     """About Page: Information about HossAgent."""
