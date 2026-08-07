@@ -731,6 +731,62 @@ class EnrichmentMetrics(SQLModel, table=True):
 
 
 # ============================================================
+# MISSION INTELLIGENCE PILOT
+# ============================================================
+
+class MissionEvaluation(SQLModel, table=True):
+    """A customer-owned release-to-outcome evaluation."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    customer_id: int = Field(foreign_key="customer.id", index=True)
+    public_id: str = Field(index=True, unique=True)
+
+    name: str
+    workflow_name: str
+    hypothesis: str
+    release_version: str
+    control_label: str = Field(default="Control")
+    treatment_label: str = Field(default="Treatment")
+    primary_metric: str = Field(default="Workflow time")
+    primary_direction: str = Field(default="lower")
+    outcome_metric: str = Field(default="Outcome success")
+    guardrail_metric: str = Field(default="Guardrail trigger rate")
+    guardrail_threshold: float = Field(default=10.0)
+    decision_owner: str
+
+    status: str = Field(default="configured", index=True)
+    dataset_filename: Optional[str] = None
+    dataset_sha256: Optional[str] = None
+    evidence_rows: int = Field(default=0)
+    validation_json: Optional[str] = None
+    analysis_json: Optional[str] = None
+    analysis_version: str = Field(default="HA-EVAL-001")
+
+    decision_action: Optional[str] = None
+    decision_rationale: Optional[str] = None
+    approved_by: Optional[str] = None
+    claim_boundary: Optional[str] = None
+    decided_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class MissionEvidenceEvent(SQLModel, table=True):
+    """A normalized, pseudonymous run used in a mission evaluation."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    evaluation_id: int = Field(foreign_key="missionevaluation.id", index=True)
+    source_row: int
+    event_time: Optional[str] = None
+    run_id: str = Field(index=True)
+    operator_id: str = Field(index=True)
+    cohort: str = Field(index=True)
+    variant: str = Field(index=True)
+    workflow_seconds: float
+    outcome_success: bool
+    guardrail_triggered: bool
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# ============================================================
 # EPIC 5: MACROSTORM / FORCECAST
 # ============================================================
 

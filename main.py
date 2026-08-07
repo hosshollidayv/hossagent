@@ -23,6 +23,7 @@ Subscription Model:
 - Paid: $99/month, unlimited access
 """
 import asyncio
+import html as html_stdlib
 import json
 import os
 import secrets
@@ -136,6 +137,9 @@ from auth_utils import (
 
 app = FastAPI(title="HossAgent Control Engine")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+from mission_intelligence import router as mission_intelligence_router
+app.include_router(mission_intelligence_router)
 
 DEFAULT_TIMEZONE = "America/New_York"
 
@@ -584,8 +588,11 @@ async def startup_event():
     print("[LEADS][STARTUP] HossNative (Autonomous Discovery) active")
     print("[LEADS][STARTUP] Lead discovery via SignalNet + web scraping - no external APIs")
     
-    asyncio.create_task(autopilot_loop())
-    print("[STARTUP] HossAgent initialized. Autopilot loop active.")
+    if os.getenv("DISABLE_AUTOPILOT", "FALSE").upper() == "TRUE":
+        print("[STARTUP] HossAgent initialized. Autopilot loop disabled by environment.")
+    else:
+        asyncio.create_task(autopilot_loop())
+        print("[STARTUP] HossAgent initialized. Autopilot loop active.")
 
 
 async def autopilot_loop():
@@ -874,9 +881,14 @@ def login_get(request: Request):
     elif request.query_params.get("logout") == "true":
         message_html = '<div class="success-message">You have been logged out.</div>'
     
+    next_path = request.query_params.get("next", "/portal")
+    if not next_path.startswith("/") or next_path.startswith("//"):
+        next_path = "/portal"
+    safe_next_path = html_stdlib.escape(next_path, quote=True)
     html = template.format(
         message_html=message_html,
-        email=""
+        email="",
+        next_input=f'<input type="hidden" name="next" value="{safe_next_path}">'
     )
     return html
 
@@ -885,6 +897,7 @@ def login_get(request: Request):
 def login_post(
     email: str = Form(...),
     password: str = Form(...),
+    next_path: str = Form("/portal", alias="next"),
     session: Session = Depends(get_session)
 ):
     """Process login form."""
@@ -894,17 +907,22 @@ def login_post(
     customer, error = authenticate_customer(session, email, password)
     
     if error:
+        safe_next_path = next_path if next_path.startswith("/") and not next_path.startswith("//") else "/portal"
+        safe_next_path = html_stdlib.escape(safe_next_path, quote=True)
         error_html = f'<div class="error-message">{error}</div>'
         html = template.format(
             message_html=error_html,
-            email=email
+            email=email,
+            next_input=f'<input type="hidden" name="next" value="{safe_next_path}">'
         )
         return HTMLResponse(content=html)
     
     track_funnel_event(EventType.LOGIN, customer_id=customer.id)
     
     session_token = create_customer_session(customer.id)
-    response = RedirectResponse(url="/portal", status_code=303)
+    if not next_path.startswith("/") or next_path.startswith("//"):
+        next_path = "/portal"
+    response = RedirectResponse(url=next_path, status_code=303)
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=session_token,
