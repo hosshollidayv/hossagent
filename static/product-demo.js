@@ -1,5 +1,6 @@
 (() => {
-  const demo = window.HOSS_PRODUCT_DEMO;
+  const configNode = document.getElementById("hoss-demo-config");
+  const demo = configNode ? JSON.parse(configNode.textContent) : null;
   if (!demo || !Array.isArray(demo.steps) || !demo.steps.length) return;
 
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (character) => ({
