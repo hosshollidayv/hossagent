@@ -22,6 +22,16 @@ const EDGE_ASSETS = new Set([
   "/static/product-demo.js",
   "/static/request-access.css",
   "/static/operator.css",
+  "/static/pipeline-health.css",
+]);
+
+const PIPELINE_ROUTES = new Map([
+  ["/public-sector/pipeline", "/public-sector/pipeline/index.html"],
+  ["/public-sector/pipeline/", "/public-sector/pipeline/index.html"],
+  ["/private-sector/pipeline", "/private-sector/pipeline/index.html"],
+  ["/private-sector/pipeline/", "/private-sector/pipeline/index.html"],
+  ["/property-intelligence/pipeline", "/property-intelligence/pipeline/index.html"],
+  ["/property-intelligence/pipeline/", "/property-intelligence/pipeline/index.html"],
 ]);
 
 const SECURITY_POLICY = [
@@ -130,6 +140,44 @@ async function operatorPage(request, env) {
   return new Response(body, { status: 200, headers });
 }
 
+async function pipelineHealthPage(request, env, assetPath) {
+  let authUrl = new URL("/operator", request.url);
+  if (env.EDGE_ORIGIN) {
+    authUrl.protocol = "https:";
+    authUrl.host = env.EDGE_ORIGIN;
+  }
+  const authRequest = new Request(authUrl, {
+    method: request.method,
+    headers: request.headers,
+  });
+  const origin = await fetch(authRequest);
+  const contentType = origin.headers.get("content-type") || "";
+  if (origin.status !== 200 || !contentType.includes("text/html")) {
+    if (origin.status >= 300 && origin.status < 400) {
+      const headers = new Headers(origin.headers);
+      headers.set("Location", `/login?next=${encodeURIComponent(new URL(request.url).pathname)}`);
+      return new Response(origin.body, { status: origin.status, headers });
+    }
+    return origin;
+  }
+
+  const assetUrl = new URL(assetPath, request.url);
+  const asset = await env.ASSETS.fetch(new Request(assetUrl, {
+    method: request.method,
+    headers: request.headers,
+  }));
+  if (!asset.ok) return new Response("Pipeline health surface unavailable", { status: 503 });
+
+  const headers = new Headers(origin.headers);
+  headers.delete("content-length");
+  headers.set("Content-Type", "text/html; charset=utf-8");
+  headers.set("X-HossAgent-Edge", "pipeline-health");
+  headers.set("Content-Security-Policy", SECURITY_POLICY);
+  headers.set("Cache-Control", "no-store");
+  const body = request.method === "HEAD" ? null : asset.body;
+  return new Response(body, { status: 200, headers });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -138,6 +186,10 @@ export default {
     }
     if (url.pathname === "/operator" && (request.method === "GET" || request.method === "HEAD")) {
       return operatorPage(request, env);
+    }
+    const pipelineAsset = PIPELINE_ROUTES.get(url.pathname);
+    if (pipelineAsset && (request.method === "GET" || request.method === "HEAD")) {
+      return pipelineHealthPage(request, env, pipelineAsset);
     }
     const pageAsset = EDGE_ROUTES.get(url.pathname);
     if (pageAsset && (request.method === "GET" || request.method === "HEAD")) {

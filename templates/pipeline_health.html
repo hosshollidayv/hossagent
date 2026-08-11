@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="%%PRODUCT_NAME%% pipeline health and evidence posture.">
+  <title>Pipeline Health — %%PRODUCT_NAME%%</title>
+  <link rel="stylesheet" href="/static/web.css">
+  <link rel="stylesheet" href="/static/operator.css">
+  <link rel="stylesheet" href="/static/pipeline-health.css">
+</head>
+<body class="pipeline-body %%THEME%%-pipeline">
+  <a class="skip-link" href="#main">Skip to pipeline health</a>
+  <header class="operator-header pipeline-header">
+    <a class="brand operator-brand" href="/operator" aria-label="HossAgent operator command"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span><span class="brand-division">%%DIVISION%%</span></a>
+    <nav class="operator-nav" aria-label="Pipeline navigation"><a href="#stages">Stages</a><a href="#checks">Evidence checks</a><a href="#blockers">Blockers</a></nav>
+    <div class="operator-session"><span><i></i>Protected session</span><a href="/operator">All products</a></div>
+  </header>
+
+  <main id="main">
+    <section class="pipeline-hero" aria-labelledby="pipeline-title">
+      <div class="pipeline-hero-copy">
+        <p class="pipeline-kicker">%%PRODUCT_NAME%% · Pipeline health</p>
+        <h1 id="pipeline-title">%%HEADLINE%%</h1>
+        <p>%%LEDE%%</p>
+        <div class="pipeline-actions"><a class="button pipeline-primary" href="#blockers">Review blockers <span aria-hidden="true">↓</span></a><a href="%%DEMO_URL%%">Open guided workflow <span aria-hidden="true">↗</span></a></div>
+      </div>
+      <aside class="pipeline-health-card" aria-label="Illustrative pipeline health">
+        <header><span>%%HEALTH_LABEL%%</span><em>Illustrative state</em></header>
+        <div class="pipeline-score"><strong>%%HEALTH_VALUE%%</strong><span>%%HEALTH_NOTE%%</span></div>
+        <div class="pipeline-decision"><small>Decision this pipeline supports</small><strong>%%DECISION%%</strong></div>
+        <div class="pipeline-boundary"><small>Governing guardrail</small><p>%%GUARDRAIL%%</p></div>
+      </aside>
+    </section>
+
+    <section class="pipeline-section" id="stages" aria-labelledby="stages-title">
+      <div class="pipeline-section-head"><div><p class="pipeline-kicker">Stage health</p><h2 id="stages-title">Find the break before the decision.</h2></div><p>The pipeline is only as strong as its weakest decision-critical stage. Volume cannot compensate for missing provenance, identity, access, or authority.</p></div>
+      <div class="pipeline-stage-grid">%%STAGES%%</div>
+    </section>
+
+    <section class="pipeline-section checks-section" id="checks" aria-labelledby="checks-title">
+      <div class="pipeline-section-head"><div><p class="pipeline-kicker">Evidence checks</p><h2 id="checks-title">Coverage with consequence.</h2></div><p>Each check maps to a condition that can release, constrain, or stop the final %%ARTIFACT%%.</p></div>
+      <div class="pipeline-check-grid">%%CHECKS%%</div>
+    </section>
+
+    <section class="pipeline-section blockers-section" id="blockers" aria-labelledby="blockers-title">
+      <div class="pipeline-section-head"><div><p class="pipeline-kicker">Operator attention</p><h2 id="blockers-title">Resolve, narrow, or stop.</h2></div><p>These examples show how unresolved evidence reaches a human review queue. They are interface fixtures, not live customer or mission records.</p></div>
+      <div class="pipeline-blockers" role="table" aria-label="Illustrative pipeline blockers">
+        <div class="pipeline-blocker blocker-labels" role="row"><span role="columnheader">Work item</span><span role="columnheader">Stage</span><span role="columnheader">Why it is blocked</span><span role="columnheader">Operator move</span></div>
+        %%BLOCKERS%%
+      </div>
+      <div class="pipeline-disclosure"><span>Interface state</span><strong>Illustrative only</strong><p>Connect a product data service before treating counts, health percentages, or blocker states as production telemetry.</p></div>
+    </section>
+  </main>
+
+  <footer class="operator-footer pipeline-footer"><a class="brand brand-footer" href="/operator"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span></a><p>Protected pipeline surface · Evidence quality before pipeline volume.</p><nav aria-label="Pipeline footer"><a href="/operator">Operator command</a><a href="%%DEMO_URL%%">Guided demo</a><a href="/logout">Sign out</a></nav></footer>
+</body>
+</html>
