@@ -81,6 +81,7 @@ class EdgeReleaseTest(unittest.TestCase):
             self.assertIn(f'href="/{slug}/pipeline"', operator)
             self.assertIn(f'"{slug}"', config)
         self.assertIn('new URL("/operator", request.url)', worker)
+        self.assertIn('redirect: "manual"', worker)
         self.assertIn('"pipeline-health"', worker)
         self.assertIn("Illustrative state", template)
         self.assertIn("Connect a product data service", template)
