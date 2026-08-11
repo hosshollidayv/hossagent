@@ -16,7 +16,7 @@ PRODUCT_DEMOS = {
         "boundary": "Synthetic opportunity. No live procurement data, bid, or partner claim.",
         "finishLabel": "Evidence-qualified pursuit",
         "finishTitle": "A pursuit packet the team can defend.",
-        "finishCta": "Discuss a public-sector pilot",
+        "finishCta": "Request public-sector early access",
         "steps": [
             {
                 "navTitle": "Detect the signal",
@@ -243,7 +243,7 @@ PRODUCT_DEMOS = {
         "boundary": "Synthetic account. No live buyer data, CRM write, email, or sales claim.",
         "finishLabel": "Buyer-verified motion",
         "finishTitle": "A sales brief that earns the right to outreach.",
-        "finishCta": "Discuss a private-sector pilot",
+        "finishCta": "Request private-sector early access",
         "steps": [
             {
                 "navTitle": "Detect growth",
@@ -470,7 +470,7 @@ PRODUCT_DEMOS = {
         "boundary": "Synthetic property and owner. No live parcel, contact, outreach, or service claim.",
         "finishLabel": "Owner-qualified opportunity",
         "finishTitle": "A property brief built for responsible action.",
-        "finishCta": "Discuss a property pilot",
+        "finishCta": "Request property early access",
         "steps": [
             {
                 "navTitle": "Detect the event",

@@ -26,8 +26,6 @@
 
 .operator-hero, .operator-section, .operator-governance, .operator-footer { width: min(1380px, calc(100% - 48px)); margin-inline: auto; }
 .operator-hero { min-height: 680px; display: grid; grid-template-columns: 1.08fr .82fr; align-items: center; gap: clamp(3rem, 8vw, 8rem); padding: 6rem 0; }
-.operator-hero-member { grid-template-columns: minmax(0, 1fr); }
-.operator-hero-member .operator-hero-copy { max-width: 940px; }
 .operator-kicker { margin: 0 0 1rem; color: var(--op-acid); font: 780 .68rem ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; }
 .operator-hero h1 { max-width: 850px; margin: 0; font-size: clamp(3.5rem, 7.4vw, 7.4rem); line-height: .88; letter-spacing: -.072em; }
 .operator-hero-copy > p:not(.operator-kicker) { max-width: 720px; margin: 2rem 0 0; color: var(--op-muted); font-size: clamp(1rem, 1.5vw, 1.2rem); }
