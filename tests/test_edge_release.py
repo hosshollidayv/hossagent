@@ -49,6 +49,17 @@ class EdgeReleaseTest(unittest.TestCase):
             "Requests are reviewed by an operator before access is granted.", worker
         )
 
+    def test_successful_request_access_post_gets_a_customer_confirmation(self):
+        worker = (ROOT / "edge" / "worker.js").read_text()
+        css = (ROOT / "static" / "request-access.css").read_text()
+        self.assertIn('request.method === "POST"', worker)
+        self.assertIn("requestAccessSuccessHtml", worker)
+        self.assertIn("We have what we need.", worker)
+        self.assertIn("Your request is in.", worker)
+        self.assertIn('href="/demos"', worker)
+        self.assertIn(".request-success-card", css)
+        self.assertIn(".success-actions", css)
+
     def test_signup_routes_to_request_access(self):
         worker = (ROOT / "edge" / "worker.js").read_text()
         self.assertIn('url.pathname === "/signup"', worker)
