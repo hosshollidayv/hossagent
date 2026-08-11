@@ -1,3 +1,4 @@
+from sqlalchemy import inspect, text
 from sqlmodel import SQLModel, create_engine, Session, select
 import os
 
@@ -263,11 +264,50 @@ def _run_sqlite_migrations():
     conn.close()
 
 
+def _run_mission_release_gate_migrations():
+    """Add release-gate hardening columns and indexes without replacing data."""
+    table_names = set(inspect(engine).get_table_names())
+    if "missionevaluation" not in table_names:
+        return
+
+    additions = {
+        "missionevaluation": {
+            "active_import_id": "INTEGER",
+            "evidence_revision": "INTEGER DEFAULT 0",
+            "decision_revision": "INTEGER DEFAULT 0",
+        },
+        "missionevidenceevent": {
+            "import_id": "INTEGER",
+        },
+    }
+    with engine.begin() as connection:
+        for table_name, columns in additions.items():
+            if table_name not in table_names:
+                continue
+            existing = {column["name"] for column in inspect(engine).get_columns(table_name)}
+            for column_name, column_type in columns.items():
+                if column_name not in existing:
+                    connection.execute(text(
+                        "ALTER TABLE %s ADD COLUMN %s %s" % (table_name, column_name, column_type)
+                    ))
+                    print("[MIGRATION] Added '%s' to %s" % (column_name, table_name))
+
+        indexes = (
+            "CREATE INDEX IF NOT EXISTS idx_missionevaluation_active_import_id ON missionevaluation(active_import_id)",
+            "CREATE INDEX IF NOT EXISTS idx_missionevidenceevent_import_id ON missionevidenceevent(import_id)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_mission_import_evaluation_revision ON missionevidenceimport(evaluation_id, revision)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_mission_decision_evaluation_revision ON missiondecisionrecord(evaluation_id, revision)",
+        )
+        for statement in indexes:
+            connection.execute(text(statement))
+
+
 def create_db_and_tables():
     """Create database tables if they don't exist and initialize SystemSettings."""
     SQLModel.metadata.create_all(engine)
     
     _run_sqlite_migrations()
+    _run_mission_release_gate_migrations()
     
     from models import SystemSettings
     with Session(engine) as session:

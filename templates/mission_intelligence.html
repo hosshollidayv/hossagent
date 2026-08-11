@@ -3,38 +3,38 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="HossAgent Mission Intelligence connects software releases to operator workflows, mission outcomes, and defensible product decisions.">
-  <title>Mission Intelligence — HossAgent</title>
+  <meta name="description" content="HossAgent Mission Release Gate turns release evidence, cohort outcomes, and guardrails into a defensible GO, MODIFY, or HOLD decision.">
+  <title>Mission Release Gate — HossAgent</title>
   {ga_script}
   <link rel="stylesheet" href="/static/web.css">
 </head>
 <body class="mission-body">
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
-    <a class="brand" href="/" aria-label="HossAgent home"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span><span class="brand-division">Mission Intelligence</span></a>
-    <nav class="site-nav mission-nav" aria-label="Mission Intelligence navigation"><a href="#capability">Capability</a><a href="#evidence">Evidence workspace</a><a href="#governance">Governance</a></nav>
-    <div class="header-actions"><a class="text-link" href="/">All products</a><a class="text-link" href="/mission-intelligence/demo">Watch demo</a><a class="button button-small" href="/request-access">Request early access</a></div>
+    <a class="brand" href="/" aria-label="HossAgent home"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span><span class="brand-division">Mission Release Gate</span></a>
+    <nav class="site-nav mission-nav" aria-label="Mission Release Gate navigation"><a href="#capability">Capability</a><a href="#evidence">Release preview</a><a href="#governance">Governance</a></nav>
+    <div class="header-actions"><a class="text-link" href="/">All products</a><a class="text-link" href="/mission-intelligence/demo">Watch demo</a><a class="button button-small" href="/request-access">Request pilot access</a></div>
   </header>
 
   <main id="main">
     <section class="mission-hero">
       <div class="mission-hero-copy">
         <p class="eyebrow">Public Sector / Mission Software</p>
-        <h1>Know whether the software made the mission better.</h1>
-        <p class="hero-lede">Connect release state, operator behavior, workflow performance, mission outcomes, and evidence provenance—without surrendering control of the data or the decision.</p>
-        <div class="hero-actions"><a class="button" href="/mission-intelligence/demo">Watch the guided demo <span aria-hidden="true">→</span></a><a class="button button-ghost" href="#evidence">Explore the product preview</a><a class="button button-ghost" href="/request-access">Request early access</a></div>
-        <p class="availability-line"><strong>Demo available now.</strong> Operational workspace coming soon.</p>
+        <h1>Make the release call with evidence.</h1>
+        <p class="hero-lede">Compare a software release against its baseline, expose cohort-specific risk, enforce declared guardrails, and leave with a signed GO, MODIFY, or HOLD record.</p>
+        <div class="hero-actions"><a class="button" href="/mission-intelligence/demo">Watch the guided demo <span aria-hidden="true">→</span></a><a class="button button-ghost" href="#evidence">Explore the release preview</a><a class="button button-ghost" href="/request-access">Request pilot access</a></div>
+        <p class="availability-line"><strong>Guided demo available now.</strong> Pilot access is limited.</p>
         <div class="mission-constraints"><span><b>Local-first</b> architecture</span><span><b>Operator-owned</b> decisions</span><span><b>Guardrail-led</b> evaluation</span></div>
       </div>
-      <div class="mission-chain" aria-label="Mission Intelligence decision chain">
+      <div class="mission-chain" aria-label="Mission Release Gate decision chain">
         <div class="chain-header"><span>Decision chain</span><span class="live-dot">Evidence linked</span></div>
-        <ol><li><span>01</span><div><strong>Release</strong><p>Version, model, configuration, feature state.</p></div></li><li><span>02</span><div><strong>Exposure</strong><p>Who received the change and under what assignment.</p></div></li><li><span>03</span><div><strong>Workflow</strong><p>Delay, rework, overrides, and cohort differences.</p></div></li><li><span>04</span><div><strong>Outcome</strong><p>Effectiveness measured against explicit guardrails.</p></div></li><li class="chain-accent"><span>05</span><div><strong>Decision</strong><p>Expand, modify, stop, or collect more evidence.</p></div></li></ol>
+        <ol><li><span>01</span><div><strong>Release</strong><p>Version, model, configuration, feature state.</p></div></li><li><span>02</span><div><strong>Exposure</strong><p>Who received the change and under what assignment.</p></div></li><li><span>03</span><div><strong>Workflow</strong><p>Delay, rework, overrides, and cohort differences.</p></div></li><li><span>04</span><div><strong>Outcome</strong><p>Effectiveness measured against explicit guardrails.</p></div></li><li class="chain-accent"><span>05</span><div><strong>Decision</strong><p>GO, MODIFY, or HOLD—with rationale and ownership.</p></div></li></ol>
       </div>
     </section>
 
     <section class="section mission-capability" id="capability" aria-labelledby="capability-title">
-      <div class="section-intro"><p class="eyebrow">Mission workflow evidence</p><h2 id="capability-title">A decision layer above raw telemetry.</h2><p>HossAgent does not replace observability or formal test. It completes the chain from deployed change to mission-relevant decision.</p></div>
-      <div class="capability-grid"><article><span>01</span><h3>Mission event contract</h3><p>Capture the minimum workflow, exposure, outcome, and guardrail events with explicit semantics.</p></article><article><span>02</span><h3>Workflow explorer</h3><p>See paths, delays, abandonment, rework, overrides, and cohort differences.</p></article><article><span>03</span><h3>Release evidence</h3><p>Bind each result to the active version, configuration, model, and assignment method.</p></article><article><span>04</span><h3>Evidence brief</h3><p>Generate a reproducible decision artifact with claim boundaries and provenance.</p></article></div>
+      <div class="section-intro"><p class="eyebrow">Release decision evidence</p><h2 id="capability-title">A release gate above raw telemetry.</h2><p>HossAgent completes the chain from deployed change to a bounded release decision.</p></div>
+      <div class="capability-grid"><article><span>01</span><h3>Evidence contract</h3><p>Validate the minimum workflow, exposure, outcome, and guardrail events before analysis.</p></article><article><span>02</span><h3>Cohort comparison</h3><p>Compare baseline and candidate performance without allowing the overall average to hide cohort risk.</p></article><article><span>03</span><h3>Release lineage</h3><p>Version each accepted import and bind every result to its dataset fingerprint.</p></article><article><span>04</span><h3>Signed release record</h3><p>Export a reproducible disposition with rationale, claim boundary, approver, and decision fingerprint.</p></article></div>
     </section>
 
     <section class="evidence-section" id="evidence" aria-labelledby="evidence-title">
@@ -82,7 +82,7 @@
       <div class="governance-grid"><div><strong>Collect</strong><p>Workflow state, release exposure, adjudicated outcome, and defined guardrails.</p></div><div><strong>Minimize</strong><p>No raw keystrokes, screen replay, payload content, or precise location by default.</p></div><div><strong>Separate</strong><p>The recorded UI action is not treated as proof that the task was completed correctly.</p></div><div><strong>Retain authority</strong><p>HossAgent recommends. The named mission, test, and product owners decide.</p></div></div>
     </section>
 
-    <section class="cta-section mission-cta" aria-labelledby="mission-cta-title"><div><p class="eyebrow">One workflow. One release. One decision.</p><h2 id="mission-cta-title">See the decision workflow in a training scenario.</h2></div><div class="cta-actions"><a class="button button-ghost-dark" href="/mission-intelligence/demo">Watch demo</a><a class="button button-light" href="/request-access">Request early access <span aria-hidden="true">→</span></a></div></section>
+    <section class="cta-section mission-cta" aria-labelledby="mission-cta-title"><div><p class="eyebrow">One workflow. One release. One decision.</p><h2 id="mission-cta-title">See the release gate make the call.</h2></div><div class="cta-actions"><a class="button button-ghost-dark" href="/mission-intelligence/demo">Watch demo</a><a class="button button-light" href="/request-access">Request pilot access <span aria-hidden="true">→</span></a></div></section>
   </main>
 
   <footer class="site-footer"><a class="brand brand-footer" href="/"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span></a><nav aria-label="Footer navigation"><a href="/">All products</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/request-access">Contact</a></nav><p>Evidence in. Operator action out.</p></footer>
@@ -127,7 +127,7 @@
     document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !modal.hidden) { modal.hidden = true; byId("brief-button").focus(); } });
     byId("brief-copy").addEventListener("click", async () => {
       const d = cohorts[activeCohort];
-      const summary = `HossAgent Mission Intelligence — Exercise ALPHA-07\nCohort: ${d.label}\nMedian triage: ${d.time} (${d.timeDelta})\nCorrect disposition: ${d.accuracy} (${d.accuracyDelta})\nFalse escalation: ${d.escalation} (${d.escalationDelta})\nDecision: ${d.title}\nBasis: ${d.copy}\n\nSynthetic demonstration data. Not an operational finding.`;
+      const summary = `HossAgent Mission Release Gate — Exercise ALPHA-07\nCohort: ${d.label}\nMedian triage: ${d.time} (${d.timeDelta})\nCorrect disposition: ${d.accuracy} (${d.accuracyDelta})\nFalse escalation: ${d.escalation} (${d.escalationDelta})\nDecision: ${d.title}\nBasis: ${d.copy}\n\nSynthetic demonstration data. Not an operational finding.`;
       await navigator.clipboard.writeText(summary);
       byId("brief-copy").textContent = "Copied";
       setTimeout(() => byId("brief-copy").textContent = "Copy decision summary", 1600);

@@ -3,29 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Configure, validate, analyze, and sign a mission software release decision with HossAgent Mission Intelligence.">
-  <title>Pilot Workspace — HossAgent Mission Intelligence</title>
+  <meta name="description" content="Configure, validate, analyze, and sign a mission software release decision with HossAgent Mission Release Gate.">
+  <title>Mission Release Gate — HossAgent</title>
   <link rel="stylesheet" href="/static/web.css">
 </head>
 <body class="mission-body pilot-body">
   <a class="skip-link" href="#pilot-main">Skip to workspace</a>
   <header class="site-header pilot-header">
-    <a class="brand" href="/mission-intelligence" aria-label="Mission Intelligence home"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span><span class="brand-division">Mission Intelligence</span></a>
-    <div class="pilot-account"><span>Secure pilot workspace</span><strong>%%CUSTOMER%%</strong><a href="/portal">Account</a></div>
+    <a class="brand" href="/mission-intelligence" aria-label="Mission Release Gate home"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span><span class="brand-division">Mission Release Gate</span></a>
+    <div class="pilot-account"><span>Protected alpha</span><strong>%%CUSTOMER%%</strong><a href="/portal">Account</a></div>
   </header>
 
   <main class="pilot-shell" id="pilot-main">
     <aside class="pilot-sidebar">
-      <div class="pilot-sidebar-head"><div><p class="eyebrow">Evaluations</p><h2>Release decisions</h2></div><button type="button" class="pilot-add" id="new-evaluation" aria-expanded="false" aria-controls="evaluation-form">+</button></div>
+      <div class="pilot-sidebar-head"><div><p class="eyebrow">Release gates</p><h2>Decision records</h2></div><button type="button" class="pilot-add" id="new-evaluation" aria-expanded="false" aria-controls="evaluation-form">+</button></div>
       <div class="pilot-evaluation-list">%%EVALUATIONS%%</div>
-      <div class="pilot-privacy"><span>Local-first control</span><p>Evidence remains inside the customer-owned application database. No outbound telemetry is introduced by this workflow.</p></div>
+      <div class="pilot-privacy"><span>Controlled evidence</span><p>Every accepted import and signed disposition is versioned, customer-scoped, and fingerprinted.</p></div>
     </aside>
 
     <div class="pilot-main">
       %%NOTICE%%
       <section class="pilot-create" id="evaluation-form" hidden>
-        <div class="pilot-create-head"><div><p class="eyebrow">New evaluation</p><h2>Freeze the decision definition before the run.</h2></div><button type="button" id="close-evaluation" aria-label="Close evaluation form">×</button></div>
+        <div class="pilot-create-head"><div><p class="eyebrow">New release gate</p><h2>Freeze the decision definition before the run.</h2></div><button type="button" id="close-evaluation" aria-label="Close evaluation form">×</button></div>
         <form action="/mission-intelligence/pilot/evaluations" method="post">
+          <input type="hidden" name="csrf_token" value="%%CREATE_CSRF%%">
           <div class="pilot-form-grid">
             <label>Evaluation name<input name="name" required placeholder="Threat-triage release 2.5"></label>
             <label>Workflow<input name="workflow_name" required placeholder="Alert to handoff"></label>
@@ -38,7 +39,7 @@
             <label>Guardrail measure<input name="guardrail_metric" required value="False escalation"></label>
             <label>Guardrail threshold (%)<input name="guardrail_threshold" type="number" min="0" max="100" step="0.1" required value="10"></label>
           </div>
-          <div class="pilot-form-footer"><span>Control and treatment labels remain fixed for the pilot event contract.</span><button class="button" type="submit">Create evaluation →</button></div>
+          <div class="pilot-form-footer"><span>Control and treatment labels remain fixed for the release event contract.</span><button class="button" type="submit">Create release gate →</button></div>
         </form>
       </section>
       %%WORKSPACE%%

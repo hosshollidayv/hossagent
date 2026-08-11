@@ -14,7 +14,7 @@ class MissionIntelligencePagesTest(unittest.TestCase):
     def test_landing_page_has_two_ingress_paths(self):
         landing = (ROOT / "templates" / "marketing_landing.html").read_text()
         self.assertGreaterEqual(landing.count('href="/mission-intelligence"'), 2)
-        self.assertIn("Public Sector / Mission Intelligence", landing)
+        self.assertIn("Public Sector / Mission Release Gate", landing)
 
     def test_product_page_discloses_synthetic_data(self):
         page = (ROOT / "templates" / "mission_intelligence.html").read_text()

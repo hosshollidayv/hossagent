@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Watch HossAgent Mission Intelligence turn a software release, pseudonymous mission evidence, and operational guardrails into a defensible operator decision.">
-  <title>Guided Demo — HossAgent Mission Intelligence</title>
+  <meta name="description" content="Watch HossAgent Mission Release Gate turn a software release, pseudonymous evidence, and declared guardrails into a defensible GO, MODIFY, or HOLD decision.">
+  <title>Guided Demo — HossAgent Mission Release Gate</title>
   {ga_script}
   <link rel="stylesheet" href="/static/web.css">
   <link rel="stylesheet" href="/static/mission-demo.css">
@@ -12,7 +12,7 @@
 <body class="demo-body">
   <a class="skip-link" href="#demo-main">Skip to demo</a>
   <header class="site-header demo-header">
-    <a class="brand" href="/mission-intelligence" aria-label="Mission Intelligence home"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span><span class="brand-division">Mission Intelligence</span></a>
+    <a class="brand" href="/mission-intelligence" aria-label="Mission Release Gate home"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span><span class="brand-division">Mission Release Gate</span></a>
     <div class="demo-header-state"><span class="demo-live"><i></i>Self-guided demo</span><a class="text-link" href="/mission-intelligence">Product overview</a><a class="button button-small" href="/request-access">Request pilot</a></div>
   </header>
 
@@ -24,8 +24,8 @@
         <button data-step="1"><span>02</span><strong>Bring the evidence</strong><small>Pseudonymous event contract</small></button>
         <button data-step="2"><span>03</span><strong>Validate the run</strong><small>Completeness + lineage</small></button>
         <button data-step="3"><span>04</span><strong>Expose cohort risk</strong><small>Control vs treatment</small></button>
-        <button data-step="4"><span>05</span><strong>Record the decision</strong><small>Operator authority retained</small></button>
-        <button data-step="5"><span>06</span><strong>Export the brief</strong><small>Reproducible artifact</small></button>
+        <button data-step="4"><span>05</span><strong>Sign the disposition</strong><small>Named authority retained</small></button>
+        <button data-step="5"><span>06</span><strong>Export the record</strong><small>Fingerprint included</small></button>
       </nav>
       <div class="demo-narration" aria-live="polite"><span id="demo-caption-label">01 · Define</span><p id="demo-caption">Start with the consequential question—not a generic analytics dashboard.</p></div>
       <div class="demo-controls">
@@ -38,7 +38,7 @@
       <p class="demo-boundary"><strong>Synthetic walkthrough.</strong> No account, upload, or operational claim.</p>
     </aside>
 
-    <section class="demo-product" aria-label="Automated Mission Intelligence product demonstration">
+    <section class="demo-product" aria-label="Automated Mission Release Gate product demonstration">
       <div class="demo-app-bar"><div><span class="brand-mark" aria-hidden="true">H</span><strong>Threat-triage release 2.5</strong><em id="demo-state-label">Configuring</em></div><div><span>MISSION DESIGN PARTNER</span><b>LOCAL</b></div></div>
       <div class="demo-stage-status"><div><span id="demo-stage-number">01</span><p id="demo-stage-kicker">Evaluation definition</p></div><strong id="demo-stage-title">Freeze the question before run one.</strong><span id="demo-counter">1 / 6</span></div>
 
@@ -61,7 +61,7 @@
             <div class="demo-dropzone" id="demo-dropzone"><span class="demo-file-icon">CSV</span><h2>Mission-run-events.csv</h2><p>Release, exposure, workflow, outcome, and guardrail fields</p><div class="demo-file-meta"><span>32 eligible runs</span><span>16 operators</span><span>8.4 KB</span></div></div>
             <div class="demo-event-stream"><div class="demo-stream-head"><span>Incoming normalized events</span><strong>LIVE</strong></div><ol><li><i></i><span>RUN-001</span><strong>CERT-01</strong><em>control</em></li><li><i></i><span>RUN-002</span><strong>CERT-02</strong><em>control</em></li><li><i></i><span>RUN-017</span><strong>TRA-01</strong><em>treatment</em></li><li><i></i><span>RUN-018</span><strong>TRA-02</strong><em>treatment</em></li><li><i></i><span>RUN-032</span><strong>TRA-08</strong><em>treatment</em></li></ol></div>
           </div>
-          <div class="demo-panel-foot"><span>Pseudonymous operator keys · replacement import · no raw payload content</span><button class="demo-action" id="demo-import">Validate evidence <b>→</b></button></div>
+          <div class="demo-panel-foot"><span>Pseudonymous operator keys · versioned import · no raw payload content</span><button class="demo-action" id="demo-import">Validate evidence <b>→</b></button></div>
         </section>
 
         <section class="demo-panel" data-panel="2" aria-label="Validate evidence">
@@ -80,22 +80,22 @@
           <div class="demo-panel-foot"><span>The overall average did not hide a consequential cohort difference</span><button class="demo-action" id="demo-review">Review disposition <b>→</b></button></div>
         </section>
 
-        <section class="demo-panel" data-panel="4" aria-label="Record the operator decision">
+        <section class="demo-panel" data-panel="4" aria-label="Sign the release disposition">
           <div class="demo-decision-layout">
-            <div><p class="demo-section-label">Release disposition</p><div class="demo-decision-options"><button>Expand</button><button id="demo-modify">Modify</button><button>Stop</button><button>Collect more</button></div><label><span>Decision rationale</span><div class="demo-textarea demo-type-line">Retain controlled exposure for certified operators. Revise trainee explanation and training before expansion.</div></label></div>
-            <aside><span>Evidence recommendation</span><strong>Modify</strong><p>Guardrail precedence applied.</p><dl><div><dt>Decision owner</dt><dd>Mission Product Owner</dd></div><div><dt>Next review</dt><dd>60 eligible trainee runs</dd></div><div><dt>Authority</dt><dd>Operator retained</dd></div></dl></aside>
+            <div><p class="demo-section-label">Release disposition</p><div class="demo-decision-options"><button>GO</button><button id="demo-modify">MODIFY</button><button>HOLD</button><button>HOLD · MORE EVIDENCE</button></div><label><span>Decision rationale</span><div class="demo-textarea demo-type-line">Retain controlled exposure for certified operators. Revise trainee explanation and training before expansion.</div></label></div>
+            <aside><span>Evidence recommendation</span><strong>MODIFY</strong><p>Guardrail precedence applied.</p><dl><div><dt>Decision owner</dt><dd>Mission Product Owner</dd></div><div><dt>Next review</dt><dd>60 eligible trainee runs</dd></div><div><dt>Authority</dt><dd>Named owner retained</dd></div></dl></aside>
           </div>
           <div class="demo-claim"><strong>Claim boundary</strong><p>This decision applies only to exercise ALPHA-07, release 2.5.0, declared cohorts, and the imported pseudonymous runs.</p></div>
           <div class="demo-panel-foot"><span>HossAgent recommends. The named mission owner decides.</span><button class="demo-action" id="demo-sign">Sign decision record <b>→</b></button></div>
         </section>
 
-        <section class="demo-panel" data-panel="5" aria-label="Export evidence brief">
+        <section class="demo-panel" data-panel="5" aria-label="Export the signed release record">
           <div class="demo-complete-banner"><i>✓</i><div><span>Decision signed</span><strong>Reproducible evidence artifact ready</strong></div><em>LOCALLY GENERATED</em></div>
           <div class="demo-brief-preview">
-            <div class="demo-brief-paper"><header><span>HOSSAGENT / MISSION INTELLIGENCE</span><h2>Threat-triage release 2.5</h2><p>Release evidence brief · HA-EVAL-001</p></header><div class="demo-brief-decision"><span>Recorded disposition</span><strong>MODIFY</strong><p>Revise trainee explanation and training before expansion.</p></div><div class="demo-brief-stats"><div><span>Runs</span><strong>32</strong></div><div><span>Outcome</span><strong>87.5%</strong></div><div><span>Guardrail</span><strong>18.8%</strong></div></div><footer>Dataset 38b9ca71…bc21 · Approved by Mission Product Owner</footer></div>
-            <div class="demo-export-panel"><p class="demo-section-label">Evidence package</p><h2>Ready for product, test, and authorization review.</h2><ul><li><i>✓</i> Release and assignment lineage</li><li><i>✓</i> Cohort comparison</li><li><i>✓</i> Guardrail findings</li><li><i>✓</i> Operator rationale and claim boundary</li></ul><button class="demo-action" id="demo-brief">Download PDF brief <b>↓</b></button><button class="demo-secondary">Open HTML brief</button></div>
+            <div class="demo-brief-paper"><header><span>HOSSAGENT / MISSION RELEASE GATE</span><h2>Threat-triage release 2.5</h2><p>Signed release record · E1 / D1</p></header><div class="demo-brief-decision"><span>Signed disposition</span><strong>MODIFY</strong><p>Revise trainee explanation and training before expansion.</p></div><div class="demo-brief-stats"><div><span>Runs</span><strong>32</strong></div><div><span>Outcome</span><strong>87.5%</strong></div><div><span>Guardrail</span><strong>18.8%</strong></div></div><footer>Dataset 38b9ca71…bc21 · Decision 9f14d773…cc08</footer></div>
+            <div class="demo-export-panel"><p class="demo-section-label">Release record</p><h2>Ready for product, test, and authorization review.</h2><ul><li><i>✓</i> Release and assignment lineage</li><li><i>✓</i> Cohort comparison</li><li><i>✓</i> Guardrail findings</li><li><i>✓</i> Rationale, claim boundary, and fingerprint</li></ul><button class="demo-action" id="demo-brief">Download signed PDF <b>↓</b></button><button class="demo-secondary">Open release record</button></div>
           </div>
-          <div class="demo-finish"><div><span>One workflow. One release. One decision.</span><strong>That is the Mission Intelligence wedge.</strong></div><a href="/request-access">Request early access →</a></div>
+          <div class="demo-finish"><div><span>One workflow. One release. One decision.</span><strong>That is the Mission Release Gate.</strong></div><a href="/request-access">Request pilot access →</a></div>
         </section>
 
         <div class="demo-cursor" id="demo-cursor" aria-hidden="true"><span></span></div>

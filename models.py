@@ -731,7 +731,7 @@ class EnrichmentMetrics(SQLModel, table=True):
 
 
 # ============================================================
-# MISSION INTELLIGENCE PILOT
+# MISSION RELEASE GATE
 # ============================================================
 
 class MissionEvaluation(SQLModel, table=True):
@@ -760,20 +760,44 @@ class MissionEvaluation(SQLModel, table=True):
     validation_json: Optional[str] = None
     analysis_json: Optional[str] = None
     analysis_version: str = Field(default="HA-EVAL-001")
+    active_import_id: Optional[int] = Field(default=None, index=True)
+    evidence_revision: int = Field(default=0)
 
     decision_action: Optional[str] = None
     decision_rationale: Optional[str] = None
     approved_by: Optional[str] = None
     claim_boundary: Optional[str] = None
     decided_at: Optional[datetime] = None
+    decision_revision: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class MissionEvidenceImport(SQLModel, table=True):
+    """An immutable validation and analysis record for one evidence upload."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    customer_id: int = Field(foreign_key="customer.id", index=True)
+    evaluation_id: int = Field(foreign_key="missionevaluation.id", index=True)
+    revision: int
+    schema_version: str = Field(default="HA-EVIDENCE-001")
+    filename: str
+    content_type: Optional[str] = None
+    bytes_received: int = Field(default=0)
+    dataset_sha256: str = Field(index=True)
+    row_count: int = Field(default=0)
+    operator_count: int = Field(default=0)
+    valid: bool = Field(default=False, index=True)
+    validation_json: str
+    analysis_json: Optional[str] = None
+    imported_by: str
+    imported_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 
 class MissionEvidenceEvent(SQLModel, table=True):
     """A normalized, pseudonymous run used in a mission evaluation."""
     id: Optional[int] = Field(default=None, primary_key=True)
     evaluation_id: int = Field(foreign_key="missionevaluation.id", index=True)
+    import_id: Optional[int] = Field(default=None, foreign_key="missionevidenceimport.id", index=True)
     source_row: int
     event_time: Optional[str] = None
     run_id: str = Field(index=True)
@@ -784,6 +808,25 @@ class MissionEvidenceEvent(SQLModel, table=True):
     outcome_success: bool
     guardrail_triggered: bool
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class MissionDecisionRecord(SQLModel, table=True):
+    """An append-only release disposition tied to a specific evidence revision."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    customer_id: int = Field(foreign_key="customer.id", index=True)
+    evaluation_id: int = Field(foreign_key="missionevaluation.id", index=True)
+    import_id: int = Field(foreign_key="missionevidenceimport.id", index=True)
+    evidence_revision: int
+    revision: int
+    action: str = Field(index=True)
+    rationale: str
+    approved_by: str
+    claim_boundary: str
+    system_recommendation: str
+    analysis_version: str
+    dataset_sha256: str
+    record_sha256: str = Field(index=True, unique=True)
+    signed_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 
 # ============================================================

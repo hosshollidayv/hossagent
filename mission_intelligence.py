@@ -1,7 +1,8 @@
-"""Pilot workflow for HossAgent Mission Intelligence."""
+"""Protected workflow for the HossAgent Mission Release Gate."""
 
 import csv
 import hashlib
+import hmac
 import html
 import io
 import json
@@ -14,11 +15,17 @@ from urllib.parse import quote_plus
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlmodel import Session, delete, select
+from sqlmodel import Session, select
 
-from auth_utils import SESSION_COOKIE_NAME, get_customer_from_session
+from auth_utils import SESSION_COOKIE_NAME, get_customer_from_session, get_session_secret
 from database import get_session
-from models import Customer, MissionEvaluation, MissionEvidenceEvent
+from models import (
+    Customer,
+    MissionDecisionRecord,
+    MissionEvaluation,
+    MissionEvidenceEvent,
+    MissionEvidenceImport,
+)
 
 
 router = APIRouter(prefix="/mission-intelligence/pilot", tags=["mission-intelligence"])
@@ -34,6 +41,22 @@ REQUIRED_EVIDENCE_FIELDS = (
 )
 DECISION_ACTIONS = {"expand", "modify", "stop", "collect_more"}
 MAX_UPLOAD_BYTES = 2 * 1024 * 1024
+MAX_EVIDENCE_ROWS = 25000
+ALLOWED_EVIDENCE_SUFFIXES = {"csv", "json"}
+ALLOWED_EVIDENCE_CONTENT_TYPES = {
+    "",
+    "application/json",
+    "application/octet-stream",
+    "text/csv",
+    "text/json",
+    "text/plain",
+}
+ACTION_LABELS = {
+    "expand": "GO",
+    "modify": "MODIFY",
+    "stop": "HOLD",
+    "collect_more": "HOLD · MORE EVIDENCE",
+}
 
 
 def _clean(value: Any, limit: int = 240) -> str:
@@ -43,6 +66,53 @@ def _clean(value: Any, limit: int = 240) -> str:
 def _slug(value: str) -> str:
     cleaned = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
     return cleaned or "evaluation"
+
+
+def _action_label(action: Optional[str]) -> str:
+    return ACTION_LABELS.get(action or "", "NOT RECORDED")
+
+
+def _canonical_sha256(payload: Dict[str, Any]) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _csrf_token(customer_id: int, purpose: str) -> str:
+    message = "%s:%s" % (customer_id, purpose)
+    return hmac.new(get_session_secret().encode("utf-8"), message.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _require_csrf(customer_id: int, purpose: str, token: str) -> None:
+    if not hmac.compare_digest(_csrf_token(customer_id, purpose), token or ""):
+        raise HTTPException(status_code=403, detail="Invalid form token")
+
+
+def build_decision_fingerprint(
+    evaluation: MissionEvaluation,
+    evidence_import: MissionEvidenceImport,
+    revision: int,
+    action: str,
+    rationale: str,
+    approved_by: str,
+    claim_boundary: str,
+    signed_at: datetime,
+) -> str:
+    """Create a deterministic fingerprint for one signed release disposition."""
+    analysis = json.loads(evidence_import.analysis_json or "{}")
+    return _canonical_sha256({
+        "record_schema": "HA-DECISION-001",
+        "evaluation_public_id": evaluation.public_id,
+        "evidence_revision": evidence_import.revision,
+        "decision_revision": revision,
+        "dataset_sha256": evidence_import.dataset_sha256,
+        "analysis_version": analysis.get("analysis_version", evaluation.analysis_version),
+        "system_recommendation": analysis.get("recommendation", {}).get("action", ""),
+        "action": action,
+        "rationale": rationale,
+        "approved_by": approved_by,
+        "claim_boundary": claim_boundary,
+        "signed_at": signed_at.isoformat() + "Z",
+    })
 
 
 def _parse_bool(value: Any) -> Optional[bool]:
@@ -62,7 +132,9 @@ def parse_evidence_bytes(filename: str, payload: bytes) -> List[Dict[str, Any]]:
     """Parse a CSV or JSON evidence file into records."""
     text = payload.decode("utf-8-sig")
     suffix = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
-    if suffix == "json" or text.lstrip().startswith(("[", "{")):
+    if suffix not in ALLOWED_EVIDENCE_SUFFIXES:
+        raise ValueError("Evidence files must use a .csv or .json extension.")
+    if suffix == "json":
         parsed = json.loads(text)
         if isinstance(parsed, dict):
             parsed = parsed.get("events")
@@ -87,6 +159,15 @@ def validate_evidence_records(records: Iterable[Dict[str, Any]]) -> Tuple[List[D
 
     if not records:
         return [], {"valid": False, "rows_received": 0, "rows_valid": 0, "errors": ["The evidence file is empty."], "warnings": []}
+    if len(records) > MAX_EVIDENCE_ROWS:
+        return [], {
+            "valid": False,
+            "rows_received": len(records),
+            "rows_valid": 0,
+            "completeness_pct": 0,
+            "errors": ["Evidence files may contain no more than %s rows." % MAX_EVIDENCE_ROWS],
+            "warnings": [],
+        }
 
     for row_number, raw in enumerate(records, start=2):
         row = {str(key).strip().lower(): value for key, value in raw.items() if key is not None}
@@ -274,6 +355,27 @@ def _owned_evaluation(session: Session, customer_id: int, public_id: str) -> Mis
     return evaluation
 
 
+def _active_import(session: Session, evaluation: MissionEvaluation) -> Optional[MissionEvidenceImport]:
+    if not evaluation.active_import_id:
+        return None
+    return session.exec(select(MissionEvidenceImport).where(
+        MissionEvidenceImport.id == evaluation.active_import_id,
+        MissionEvidenceImport.evaluation_id == evaluation.id,
+        MissionEvidenceImport.customer_id == evaluation.customer_id,
+        MissionEvidenceImport.valid == True,  # noqa: E712
+    )).first()
+
+
+def _current_decision(session: Session, evaluation: MissionEvaluation) -> Optional[MissionDecisionRecord]:
+    if not evaluation.active_import_id:
+        return None
+    return session.exec(select(MissionDecisionRecord).where(
+        MissionDecisionRecord.evaluation_id == evaluation.id,
+        MissionDecisionRecord.customer_id == evaluation.customer_id,
+        MissionDecisionRecord.import_id == evaluation.active_import_id,
+    ).order_by(MissionDecisionRecord.revision.desc())).first()
+
+
 def _redirect(public_id: str, notice: str) -> RedirectResponse:
     url = "/mission-intelligence/pilot?evaluation=%s&notice=%s" % (quote_plus(public_id), quote_plus(notice))
     return RedirectResponse(url=url, status_code=303)
@@ -351,26 +453,64 @@ def _validation_html(validation: Optional[Dict[str, Any]]) -> str:
     )
 
 
-def _evaluation_workspace(evaluation: MissionEvaluation) -> str:
+def _history_html(imports: List[MissionEvidenceImport], decisions: List[MissionDecisionRecord]) -> str:
+    import_rows = "".join(
+        '<div class="history-row"><span>E%s</span><strong>%s</strong><em class="%s">%s</em><small>%s rows · %s…</small></div>' % (
+            item.revision,
+            html.escape(item.filename),
+            "healthy" if item.valid else "breach",
+            "Accepted" if item.valid else "Blocked",
+            item.row_count,
+            html.escape(item.dataset_sha256[:12]),
+        ) for item in imports
+    ) or '<div class="history-empty">No evidence revisions recorded.</div>'
+    decision_rows = "".join(
+        '<div class="history-row"><span>D%s</span><strong>%s</strong><em>%s</em><small>%s · %s…</small></div>' % (
+            item.revision,
+            _action_label(item.action),
+            html.escape(item.approved_by),
+            item.signed_at.strftime("%Y-%m-%d %H:%M UTC"),
+            html.escape(item.record_sha256[:12]),
+        ) for item in decisions
+    ) or '<div class="history-empty">No signed decisions recorded.</div>'
+    return '<article class="pilot-stage history-stage"><div class="pilot-stage-head"><span>04</span><div><p>Release record</p><h2>Evidence and decision history.</h2></div></div><div class="history-grid"><section><h3>Evidence revisions</h3>%s</section><section><h3>Signed decisions</h3>%s</section></div></article>' % (import_rows, decision_rows)
+
+
+def _evaluation_workspace(
+    evaluation: MissionEvaluation,
+    imports: List[MissionEvidenceImport],
+    decisions: List[MissionDecisionRecord],
+    customer_id: int,
+) -> str:
     validation = json.loads(evaluation.validation_json) if evaluation.validation_json else None
     analysis = json.loads(evaluation.analysis_json) if evaluation.analysis_json else None
-    decision_label = (evaluation.decision_action or "Not recorded").replace("_", " ").title()
+    current_decision = next((item for item in decisions if item.import_id == evaluation.active_import_id), None)
+    active_import = next((item for item in imports if item.id == evaluation.active_import_id), None)
+    decision_label = _action_label(evaluation.decision_action)
     checked = evaluation.decision_action or (analysis or {}).get("recommendation", {}).get("action", "modify")
     action_options = "".join(
         '<label><input type="radio" name="decision_action" value="%s" %s><span>%s</span></label>' % (
             action, "checked" if checked == action else "", label
-        ) for action, label in (("expand", "Expand"), ("modify", "Modify"), ("stop", "Stop"), ("collect_more", "Collect more"))
+        ) for action, label in (("expand", "GO"), ("modify", "MODIFY"), ("stop", "HOLD"), ("collect_more", "HOLD · MORE EVIDENCE"))
     )
+    export_actions = (
+        '<div class="export-actions"><a href="/mission-intelligence/pilot/%s/brief" target="_blank">Open release record</a><a href="/mission-intelligence/pilot/%s/brief.pdf">Download signed PDF</a></div>' % (evaluation.public_id, evaluation.public_id)
+        if current_decision else '<div class="export-actions export-locked"><span>Sign a disposition to unlock the release record.</span></div>'
+    )
+    revision_line = "Evidence E%s" % active_import.revision if active_import else "No active evidence"
+    if current_decision:
+        revision_line += " · Decision D%s · %s…" % (current_decision.revision, current_decision.record_sha256[:12])
     return """
       <section class="pilot-workspace">
-        <div class="pilot-workspace-head"><div><p class="eyebrow">Active evaluation</p><h1>%s</h1><p>%s</p></div><div class="pilot-status"><span>%s</span><strong>%s</strong></div></div>
+        <div class="pilot-workspace-head"><div><p class="eyebrow">Active release gate</p><h1>%s</h1><p>%s</p></div><div class="pilot-status"><span>%s</span><strong>%s</strong><small>%s</small></div></div>
         <div class="pilot-definition">
           <div><span>Workflow</span><strong>%s</strong></div><div><span>Release</span><strong>%s</strong></div><div><span>Primary measure</span><strong>%s · %s is better</strong></div><div><span>Guardrail</span><strong>%s ≤ %.1f%%</strong></div><div><span>Decision owner</span><strong>%s</strong></div>
         </div>
         <div class="pilot-stage-grid">
           <article class="pilot-stage"><div class="pilot-stage-head"><span>01</span><div><p>Evidence intake</p><h2>Import the mission event contract.</h2></div></div>
-            <p class="stage-copy">CSV or JSON · 2 MB maximum · replacement import · pseudonymous operator keys</p>
+            <p class="stage-copy">CSV or JSON · 2 MB / 25,000 row maximum · versioned imports · pseudonymous operator keys</p>
             <form class="upload-form" action="/mission-intelligence/pilot/%s/evidence" method="post" enctype="multipart/form-data">
+              <input type="hidden" name="csrf_token" value="%s">
               <label class="upload-zone"><input type="file" name="evidence_file" accept=".csv,.json,text/csv,application/json" required><strong>Choose an evidence file</strong><span>run, operator, cohort, assignment, timing, outcome, guardrail</span></label>
               <div class="upload-actions"><a href="/mission-intelligence/pilot/sample.csv">Download sample CSV</a><button class="button button-light" type="submit">Validate &amp; analyze →</button></div>
             </form>%s
@@ -379,26 +519,37 @@ def _evaluation_workspace(evaluation: MissionEvaluation) -> str:
         </div>
         <article class="pilot-stage decision-stage"><div class="pilot-stage-head"><span>03</span><div><p>Operator-owned decision</p><h2>Record the release disposition.</h2></div><div class="decision-current"><span>Current record</span><strong>%s</strong></div></div>
           <form action="/mission-intelligence/pilot/%s/decision" method="post">
+            <input type="hidden" name="csrf_token" value="%s">
             <div class="decision-actions">%s</div>
             <div class="decision-fields"><label>Decision rationale<textarea name="decision_rationale" required placeholder="State why this evidence supports the selected action.">%s</textarea></label><label>Approved by<input name="approved_by" required value="%s"></label></div>
             <label>Claim boundary<textarea name="claim_boundary" required>%s</textarea></label>
             <div class="decision-footer"><span>HossAgent recommends. The named owner decides.</span><button class="button" type="submit">Sign decision record →</button></div>
           </form>
-          <div class="export-actions"><a href="/mission-intelligence/pilot/%s/brief" target="_blank">Open HTML brief</a><a href="/mission-intelligence/pilot/%s/brief.pdf">Download PDF brief</a></div>
+          %s
         </article>
+        %s
       </section>
     """ % (
-        html.escape(evaluation.name), html.escape(evaluation.hypothesis), html.escape(evaluation.status.replace("_", " ")), evaluation.evidence_rows,
+        html.escape(evaluation.name), html.escape(evaluation.hypothesis), html.escape(evaluation.status.replace("_", " ")), evaluation.evidence_rows, html.escape(revision_line),
         html.escape(evaluation.workflow_name), html.escape(evaluation.release_version), html.escape(evaluation.primary_metric), html.escape(evaluation.primary_direction),
         html.escape(evaluation.guardrail_metric), evaluation.guardrail_threshold, html.escape(evaluation.decision_owner), evaluation.public_id,
-        _validation_html(validation), _analysis_html(evaluation, analysis), decision_label, evaluation.public_id, action_options,
+        _csrf_token(customer_id, "evidence:%s" % evaluation.public_id),
+        _validation_html(validation), _analysis_html(evaluation, analysis), decision_label, evaluation.public_id,
+        _csrf_token(customer_id, "decision:%s" % evaluation.public_id), action_options,
         html.escape(evaluation.decision_rationale or ""), html.escape(evaluation.approved_by or evaluation.decision_owner),
         html.escape(evaluation.claim_boundary or (analysis or {}).get("claim_boundary", "This decision applies only to the defined evaluation and imported evidence.")),
-        evaluation.public_id, evaluation.public_id,
+        export_actions, _history_html(imports, decisions),
     )
 
 
-def _render_pilot(customer: Customer, evaluations: List[MissionEvaluation], selected: Optional[MissionEvaluation], notice: str = "") -> str:
+def _render_pilot(
+    customer: Customer,
+    evaluations: List[MissionEvaluation],
+    selected: Optional[MissionEvaluation],
+    imports: List[MissionEvidenceImport],
+    decisions: List[MissionDecisionRecord],
+    notice: str = "",
+) -> str:
     with open("templates/mission_pilot.html", "r") as handle:
         template = handle.read()
     evaluation_links = "".join(
@@ -411,9 +562,10 @@ def _render_pilot(customer: Customer, evaluations: List[MissionEvaluation], sele
             item.evidence_rows,
         ) for item in evaluations
     ) or '<div class="pilot-list-empty">No evaluations yet.</div>'
-    workspace = _evaluation_workspace(selected) if selected else '<section class="pilot-welcome"><p class="eyebrow">Pilot workspace</p><h1>Run one defensible release decision.</h1><p>Define the question, import pseudonymous exercise evidence, inspect cohort risk, and leave with a signed decision artifact.</p><ol><li><span>01</span>Define</li><li><span>02</span>Import</li><li><span>03</span>Decide</li></ol></section>'
+    workspace = _evaluation_workspace(selected, imports, decisions, customer.id) if selected else '<section class="pilot-welcome"><p class="eyebrow">Mission Release Gate</p><h1>Run one defensible release decision.</h1><p>Define the release question, import pseudonymous evidence, inspect cohort risk, and leave with a signed release record.</p><ol><li><span>01</span>Define</li><li><span>02</span>Validate</li><li><span>03</span>Decide</li></ol></section>'
     replacements = {
         "%%CUSTOMER%%": html.escape(customer.company),
+        "%%CREATE_CSRF%%": _csrf_token(customer.id, "create-evaluation"),
         "%%NOTICE%%": '<div class="pilot-notice">%s</div>' % html.escape(notice) if notice else "",
         "%%EVALUATIONS%%": evaluation_links,
         "%%WORKSPACE%%": workspace,
@@ -437,7 +589,18 @@ def pilot_workspace(request: Request, evaluation: Optional[str] = None, notice: 
         selected = next((item for item in evaluations if item.public_id == evaluation), None)
     elif evaluations:
         selected = evaluations[0]
-    return HTMLResponse(_render_pilot(customer, evaluations, selected, notice))
+    imports: List[MissionEvidenceImport] = []
+    decisions: List[MissionDecisionRecord] = []
+    if selected:
+        imports = list(session.exec(select(MissionEvidenceImport).where(
+            MissionEvidenceImport.evaluation_id == selected.id,
+            MissionEvidenceImport.customer_id == customer.id,
+        ).order_by(MissionEvidenceImport.revision.desc())).all())
+        decisions = list(session.exec(select(MissionDecisionRecord).where(
+            MissionDecisionRecord.evaluation_id == selected.id,
+            MissionDecisionRecord.customer_id == customer.id,
+        ).order_by(MissionDecisionRecord.revision.desc())).all())
+    return HTMLResponse(_render_pilot(customer, evaluations, selected, imports, decisions, notice))
 
 
 @router.post("/evaluations")
@@ -453,11 +616,13 @@ def create_evaluation(
     guardrail_metric: str = Form(...),
     guardrail_threshold: float = Form(...),
     decision_owner: str = Form(...),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ):
     customer = _customer(request, session)
     if not customer:
         return RedirectResponse(url="/login?next=/mission-intelligence/pilot", status_code=303)
+    _require_csrf(customer.id, "create-evaluation", csrf_token)
     if primary_direction not in {"lower", "higher"}:
         primary_direction = "lower"
     guardrail_threshold = max(0.0, min(float(guardrail_threshold), 100.0))
@@ -486,43 +651,90 @@ async def import_evidence(
     public_id: str,
     request: Request,
     evidence_file: UploadFile = File(...),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ):
     customer = _customer(request, session)
     if not customer:
         return RedirectResponse(url="/login?next=/mission-intelligence/pilot", status_code=303)
+    _require_csrf(customer.id, "evidence:%s" % public_id, csrf_token)
     evaluation = _owned_evaluation(session, customer.id, public_id)
     payload = await evidence_file.read(MAX_UPLOAD_BYTES + 1)
     filename = _clean(evidence_file.filename or "evidence.csv", 180)
     if len(payload) > MAX_UPLOAD_BYTES:
         return _redirect(public_id, "Import blocked: evidence files must be 2 MB or smaller.")
+    dataset_sha256 = hashlib.sha256(payload).hexdigest()
+    duplicate = session.exec(select(MissionEvidenceImport).where(
+        MissionEvidenceImport.evaluation_id == evaluation.id,
+        MissionEvidenceImport.customer_id == customer.id,
+        MissionEvidenceImport.dataset_sha256 == dataset_sha256,
+        MissionEvidenceImport.valid == True,  # noqa: E712
+    )).first()
+    if duplicate:
+        return _redirect(public_id, "This exact evidence file is already recorded as revision %s." % duplicate.revision)
+
+    latest_import = session.exec(select(MissionEvidenceImport).where(
+        MissionEvidenceImport.evaluation_id == evaluation.id,
+        MissionEvidenceImport.customer_id == customer.id,
+    ).order_by(MissionEvidenceImport.revision.desc())).first()
+    revision = (latest_import.revision if latest_import else 0) + 1
+    content_type = _clean((evidence_file.content_type or "").split(";", 1)[0].lower(), 100)
+    suffix = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
     try:
+        if suffix not in ALLOWED_EVIDENCE_SUFFIXES or content_type not in ALLOWED_EVIDENCE_CONTENT_TYPES:
+            raise ValueError("Evidence files must be CSV or JSON.")
         records = parse_evidence_bytes(filename, payload)
         normalized, validation = validate_evidence_records(records)
     except (UnicodeDecodeError, json.JSONDecodeError, csv.Error, ValueError) as exc:
         normalized = []
         validation = {"valid": False, "rows_received": 0, "rows_valid": 0, "completeness_pct": 0, "errors": [str(exc)], "warnings": []}
 
-    evaluation.dataset_filename = filename
-    evaluation.dataset_sha256 = hashlib.sha256(payload).hexdigest()
-    evaluation.validation_json = json.dumps(validation)
+    analysis = None
+    if validation.get("valid"):
+        analysis = compute_evidence_analysis(normalized, evaluation.guardrail_threshold, evaluation.primary_direction)
+    evidence_import = MissionEvidenceImport(
+        customer_id=customer.id,
+        evaluation_id=evaluation.id,
+        revision=revision,
+        filename=filename,
+        content_type=content_type or None,
+        bytes_received=len(payload),
+        dataset_sha256=dataset_sha256,
+        row_count=len(normalized),
+        operator_count=len({row["operator_id"] for row in normalized}),
+        valid=bool(validation.get("valid")),
+        validation_json=json.dumps(validation, sort_keys=True),
+        analysis_json=json.dumps(analysis, sort_keys=True) if analysis else None,
+        imported_by=customer.contact_email,
+    )
+    session.add(evidence_import)
+    session.flush()
+    evaluation.evidence_revision = revision
     evaluation.updated_at = datetime.utcnow()
+
     if not validation.get("valid"):
-        evaluation.status = "validation_failed"
         session.add(evaluation)
         session.commit()
-        return _redirect(public_id, "Import blocked. Review the evidence contract findings below.")
+        return _redirect(public_id, "Import revision %s was blocked. The active evidence record was not changed." % revision)
 
-    session.exec(delete(MissionEvidenceEvent).where(MissionEvidenceEvent.evaluation_id == evaluation.id))
     for row in normalized:
-        session.add(MissionEvidenceEvent(evaluation_id=evaluation.id, **row))
-    analysis = compute_evidence_analysis(normalized, evaluation.guardrail_threshold, evaluation.primary_direction)
-    evaluation.analysis_json = json.dumps(analysis)
+        session.add(MissionEvidenceEvent(evaluation_id=evaluation.id, import_id=evidence_import.id, **row))
+    evaluation.active_import_id = evidence_import.id
+    evaluation.dataset_filename = filename
+    evaluation.dataset_sha256 = dataset_sha256
+    evaluation.validation_json = evidence_import.validation_json
+    evaluation.analysis_json = evidence_import.analysis_json
+    evaluation.analysis_version = analysis["analysis_version"]
     evaluation.evidence_rows = len(normalized)
+    evaluation.decision_action = None
+    evaluation.decision_rationale = None
+    evaluation.approved_by = None
+    evaluation.claim_boundary = None
+    evaluation.decided_at = None
     evaluation.status = "review_required"
     session.add(evaluation)
     session.commit()
-    return _redirect(public_id, "Evidence accepted. Cohort analysis and release recommendation are ready.")
+    return _redirect(public_id, "Evidence revision %s accepted. Cohort analysis and release recommendation are ready." % revision)
 
 
 @router.post("/{public_id}/decision")
@@ -533,34 +745,76 @@ def record_decision(
     decision_rationale: str = Form(...),
     approved_by: str = Form(...),
     claim_boundary: str = Form(...),
+    csrf_token: str = Form(...),
     session: Session = Depends(get_session),
 ):
     customer = _customer(request, session)
     if not customer:
         return RedirectResponse(url="/login?next=/mission-intelligence/pilot", status_code=303)
+    _require_csrf(customer.id, "decision:%s" % public_id, csrf_token)
     evaluation = _owned_evaluation(session, customer.id, public_id)
     if not evaluation.analysis_json:
         return _redirect(public_id, "Import valid evidence before recording a decision.")
     if decision_action not in DECISION_ACTIONS:
         return _redirect(public_id, "Select a valid release action.")
+    evidence_import = _active_import(session, evaluation)
+    if not evidence_import or not evidence_import.analysis_json:
+        return _redirect(public_id, "The active evidence revision is unavailable. Import evidence again before signing.")
+    rationale = _clean(decision_rationale, 2000)
+    approver = _clean(approved_by, 120)
+    boundary = _clean(claim_boundary, 1200)
+    if not rationale or not approver or not boundary:
+        return _redirect(public_id, "Rationale, approver, and claim boundary are required.")
+    latest_decision = session.exec(select(MissionDecisionRecord).where(
+        MissionDecisionRecord.evaluation_id == evaluation.id,
+        MissionDecisionRecord.customer_id == customer.id,
+    ).order_by(MissionDecisionRecord.revision.desc())).first()
+    if latest_decision and latest_decision.import_id == evidence_import.id and all((
+        latest_decision.action == decision_action,
+        latest_decision.rationale == rationale,
+        latest_decision.approved_by == approver,
+        latest_decision.claim_boundary == boundary,
+    )):
+        return _redirect(public_id, "That signed disposition is already the current decision record.")
+    revision = (latest_decision.revision if latest_decision else 0) + 1
+    signed_at = datetime.utcnow()
+    record_sha256 = build_decision_fingerprint(
+        evaluation, evidence_import, revision, decision_action, rationale, approver, boundary, signed_at
+    )
+    analysis = json.loads(evidence_import.analysis_json)
+    decision_record = MissionDecisionRecord(
+        customer_id=customer.id,
+        evaluation_id=evaluation.id,
+        import_id=evidence_import.id,
+        evidence_revision=evidence_import.revision,
+        revision=revision,
+        action=decision_action,
+        rationale=rationale,
+        approved_by=approver,
+        claim_boundary=boundary,
+        system_recommendation=analysis.get("recommendation", {}).get("action", ""),
+        analysis_version=analysis.get("analysis_version", evaluation.analysis_version),
+        dataset_sha256=evidence_import.dataset_sha256,
+        record_sha256=record_sha256,
+        signed_at=signed_at,
+    )
+    session.add(decision_record)
     evaluation.decision_action = decision_action
-    evaluation.decision_rationale = _clean(decision_rationale, 2000)
-    evaluation.approved_by = _clean(approved_by, 120)
-    evaluation.claim_boundary = _clean(claim_boundary, 1200)
-    evaluation.decided_at = datetime.utcnow()
+    evaluation.decision_rationale = rationale
+    evaluation.approved_by = approver
+    evaluation.claim_boundary = boundary
+    evaluation.decided_at = signed_at
+    evaluation.decision_revision = revision
     evaluation.updated_at = datetime.utcnow()
     evaluation.status = "decided"
     session.add(evaluation)
     session.commit()
-    return _redirect(public_id, "Decision signed. The evidence brief is ready to export.")
+    return _redirect(public_id, "Decision revision %s signed. The release record is ready to export." % revision)
 
 
-def _brief_html(evaluation: MissionEvaluation, customer: Customer) -> str:
-    if not evaluation.analysis_json:
-        raise HTTPException(status_code=409, detail="Evidence analysis is not ready")
+def _brief_html(evaluation: MissionEvaluation, customer: Customer, decision_record: MissionDecisionRecord) -> str:
     analysis = json.loads(evaluation.analysis_json)
     recommendation = analysis["recommendation"]
-    overall = analysis["cohorts"][0]
     cohort_rows = "".join(
         "<tr><td>%s</td><td>%s / %s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
             html.escape(row["name"]), row["control"]["count"], row["treatment"]["count"],
@@ -569,28 +823,28 @@ def _brief_html(evaluation: MissionEvaluation, customer: Customer) -> str:
             _format_number(row["treatment"]["guardrail_rate"], "%"),
         ) for row in analysis["cohorts"]
     )
-    decision = (evaluation.decision_action or "Pending operator decision").replace("_", " ").upper()
-    decided_at = evaluation.decided_at.isoformat() + "Z" if evaluation.decided_at else "Not yet signed"
-    return """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>%s · Evidence brief</title><style>
-      body{margin:0;background:#eeece4;color:#171a18;font:15px/1.55 Inter,Arial,sans-serif}.page{max-width:920px;margin:40px auto;background:#fffefa;border:1px solid #c9c8c0}.head{padding:32px;background:#111513;color:#fff}.brand{color:#c8f16b;font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:12px}.head h1{font-size:42px;line-height:1;margin:26px 0 10px}.head p{color:#a9b1ab}.meta,.metrics{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #c9c8c0}.meta div,.metrics div{padding:18px;border-right:1px solid #c9c8c0}.meta span,.metrics span{display:block;color:#626963;font-size:11px;text-transform:uppercase}.meta strong,.metrics strong{display:block;margin-top:6px}.section{padding:28px 32px;border-bottom:1px solid #c9c8c0}.decision{border-left:5px solid #c8f16b;background:#edf4ef}.decision strong{font-size:28px}.decision p{max-width:760px}.section h2{margin-top:0}table{width:100%%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd}.boundary{background:#f6efe3;border-left:4px solid #d19b48}.foot{padding:22px 32px;color:#626963;font-size:12px}.actions{max-width:920px;margin:20px auto;display:flex;gap:10px}.actions button,.actions a{padding:11px 16px;background:#111513;color:#fff;text-decoration:none;border:0;border-radius:5px;cursor:pointer}@media print{.actions{display:none}.page{margin:0;border:0}}
+    decision = _action_label(decision_record.action)
+    decided_at = decision_record.signed_at.isoformat() + "Z"
+    return """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>%s · Release record</title><style>
+      body{margin:0;background:#eeece4;color:#171a18;font:15px/1.55 Inter,Arial,sans-serif}.page{max-width:920px;margin:40px auto;background:#fffefa;border:1px solid #c9c8c0}.head{padding:32px;background:#111513;color:#fff}.brand{color:#c8f16b;font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:12px}.head h1{font-size:42px;line-height:1;margin:26px 0 10px}.head p{color:#a9b1ab}.meta,.metrics{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #c9c8c0}.meta div,.metrics div{min-width:0;padding:18px;border-right:1px solid #c9c8c0}.meta span,.metrics span{display:block;color:#626963;font-size:11px;text-transform:uppercase}.meta strong,.metrics strong{display:block;margin-top:6px;overflow-wrap:anywhere}.section{padding:28px 32px;border-bottom:1px solid #c9c8c0}.decision{border-left:5px solid #c8f16b;background:#edf4ef}.decision strong{font-size:28px}.decision p{max-width:760px}.section h2{margin-top:0}table{width:100%%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd}.boundary{background:#f6efe3;border-left:4px solid #d19b48}.foot{padding:22px 32px;color:#626963;font-size:12px;overflow-wrap:anywhere}.actions{max-width:920px;margin:20px auto;display:flex;gap:10px}.actions button,.actions a{padding:11px 16px;background:#111513;color:#fff;text-decoration:none;border:0;border-radius:5px;cursor:pointer}@media(max-width:700px){.meta,.metrics{grid-template-columns:1fr 1fr}.head h1{font-size:32px}.page{margin:0}.section{padding:22px 18px}}@media print{.actions{display:none}.page{margin:0;border:0}}
     </style></head><body><div class="actions"><button onclick="window.print()">Print / save PDF</button><a href="/mission-intelligence/pilot/%s/brief.pdf">Download PDF</a></div><main class="page">
-      <header class="head"><div class="brand">HossAgent · Mission Intelligence</div><h1>%s</h1><p>%s</p></header>
-      <section class="meta"><div><span>Customer</span><strong>%s</strong></div><div><span>Release</span><strong>%s</strong></div><div><span>Analysis</span><strong>%s</strong></div><div><span>Dataset SHA-256</span><strong>%s…</strong></div></section>
-      <section class="section decision"><span>Recorded disposition</span><br><strong>%s</strong><p>%s</p><small>Approved by %s · %s</small></section>
+      <header class="head"><div class="brand">HossAgent · Mission Release Gate</div><h1>%s</h1><p>%s</p></header>
+      <section class="meta"><div><span>Customer</span><strong>%s</strong></div><div><span>Release</span><strong>%s</strong></div><div><span>Evidence / decision</span><strong>E%s / D%s</strong></div><div><span>Analysis</span><strong>%s</strong></div></section>
+      <section class="section decision"><span>Signed disposition</span><br><strong>%s</strong><p>%s</p><small>Approved by %s · %s</small></section>
       <section class="metrics"><div><span>Eligible runs</span><strong>%s</strong></div><div><span>Operators</span><strong>%s</strong></div><div><span>System recommendation</span><strong>%s</strong></div><div><span>Guardrail threshold</span><strong>%.1f%%</strong></div></section>
       <section class="section"><h2>Cohort evidence</h2><table><thead><tr><th>Cohort</th><th>Control / treatment</th><th>Treatment median</th><th>Outcome</th><th>Guardrail</th></tr></thead><tbody>%s</tbody></table></section>
       <section class="section"><h2>Recommendation basis</h2><p><strong>%s</strong></p><p>%s</p></section>
       <section class="section boundary"><h2>Claim boundary</h2><p>%s</p></section>
-      <footer class="foot">Locally generated evidence artifact · %s · Source file: %s</footer>
+      <footer class="foot">Dataset SHA-256: %s<br>Decision SHA-256: %s<br>Source: %s · Generated %s</footer>
     </main></body></html>""" % (
         html.escape(evaluation.name), evaluation.public_id, html.escape(evaluation.name), html.escape(evaluation.hypothesis),
-        html.escape(customer.company), html.escape(evaluation.release_version), html.escape(evaluation.analysis_version),
-        html.escape((evaluation.dataset_sha256 or "unavailable")[:16]), decision,
-        html.escape(evaluation.decision_rationale or "Operator decision has not been recorded."),
-        html.escape(evaluation.approved_by or evaluation.decision_owner), decided_at,
-        analysis["row_count"], analysis["operator_count"], html.escape(recommendation["action"].replace("_", " ").title()),
+        html.escape(customer.company), html.escape(evaluation.release_version), decision_record.evidence_revision, decision_record.revision,
+        html.escape(evaluation.analysis_version), decision,
+        html.escape(decision_record.rationale), html.escape(decision_record.approved_by), decided_at,
+        analysis["row_count"], analysis["operator_count"], html.escape(_action_label(recommendation["action"])),
         evaluation.guardrail_threshold, cohort_rows, html.escape(recommendation["title"]), html.escape(recommendation["basis"]),
-        html.escape(evaluation.claim_boundary or analysis["claim_boundary"]), datetime.utcnow().isoformat() + "Z", html.escape(evaluation.dataset_filename or "unavailable"),
+        html.escape(decision_record.claim_boundary), html.escape(decision_record.dataset_sha256), html.escape(decision_record.record_sha256),
+        html.escape(evaluation.dataset_filename or "unavailable"), datetime.utcnow().isoformat() + "Z",
     )
 
 
@@ -600,7 +854,10 @@ def evidence_brief(public_id: str, request: Request, session: Session = Depends(
     if not customer:
         return RedirectResponse(url="/login?next=/mission-intelligence/pilot", status_code=303)
     evaluation = _owned_evaluation(session, customer.id, public_id)
-    return HTMLResponse(_brief_html(evaluation, customer))
+    decision_record = _current_decision(session, evaluation)
+    if not decision_record or not evaluation.analysis_json:
+        raise HTTPException(status_code=409, detail="Sign a decision for the active evidence revision before exporting")
+    return HTMLResponse(_brief_html(evaluation, customer, decision_record))
 
 
 @router.get("/{public_id}/brief.pdf")
@@ -609,8 +866,9 @@ def evidence_brief_pdf(public_id: str, request: Request, session: Session = Depe
     if not customer:
         return RedirectResponse(url="/login?next=/mission-intelligence/pilot", status_code=303)
     evaluation = _owned_evaluation(session, customer.id, public_id)
-    if not evaluation.analysis_json:
-        raise HTTPException(status_code=409, detail="Evidence analysis is not ready")
+    decision_record = _current_decision(session, evaluation)
+    if not decision_record or not evaluation.analysis_json:
+        raise HTTPException(status_code=409, detail="Sign a decision for the active evidence revision before exporting")
     analysis = json.loads(evaluation.analysis_json)
     recommendation = analysis["recommendation"]
     from fpdf import FPDF
@@ -619,14 +877,14 @@ def evidence_brief_pdf(public_id: str, request: Request, session: Session = Depe
         return str(value or "").encode("latin-1", "replace").decode("latin-1")
 
     pdf = FPDF()
-    pdf.set_title(latin(evaluation.name + " - Evidence brief"))
+    pdf.set_title(latin(evaluation.name + " - Release record"))
     pdf.add_page()
     pdf.set_fill_color(17, 21, 19)
     pdf.rect(0, 0, 210, 54, "F")
     pdf.set_text_color(200, 241, 107)
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_xy(16, 13)
-    pdf.cell(0, 6, "HOSSAGENT / MISSION INTELLIGENCE")
+    pdf.cell(0, 6, "HOSSAGENT / MISSION RELEASE GATE")
     pdf.set_text_color(255, 255, 255)
     pdf.set_font("Helvetica", "B", 22)
     pdf.set_xy(16, 25)
@@ -640,10 +898,10 @@ def evidence_brief_pdf(public_id: str, request: Request, session: Session = Depe
     pdf.cell(0, 7, "RECORDED DISPOSITION")
     pdf.ln(8)
     pdf.set_font("Helvetica", "B", 18)
-    pdf.cell(0, 9, latin((evaluation.decision_action or "Pending").replace("_", " ").upper()))
+    pdf.cell(0, 9, latin(_action_label(decision_record.action)))
     pdf.ln(11)
     pdf.set_font("Helvetica", "", 10)
-    pdf.multi_cell(178, 6, latin(evaluation.decision_rationale or "Operator decision has not been recorded."))
+    pdf.multi_cell(178, 6, latin(decision_record.rationale))
     pdf.ln(5)
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 7, "EVIDENCE SUMMARY")
@@ -654,7 +912,7 @@ def evidence_brief_pdf(public_id: str, request: Request, session: Session = Depe
         "Eligible runs: %s | Pseudonymous operators: %s" % (analysis["row_count"], analysis["operator_count"]),
         "Treatment median: %s | Outcome success: %s" % (_format_number(treatment["median_seconds"], "s"), _format_number(treatment["outcome_rate"], "%")),
         "Guardrail rate: %s | Threshold: %.1f%%" % (_format_number(treatment["guardrail_rate"], "%"), evaluation.guardrail_threshold),
-        "System recommendation: %s" % recommendation["title"],
+        "System recommendation: %s" % _action_label(recommendation["action"]),
     ]
     pdf.set_font("Helvetica", "", 10)
     for line in lines:
@@ -664,14 +922,17 @@ def evidence_brief_pdf(public_id: str, request: Request, session: Session = Depe
     pdf.cell(0, 7, "CLAIM BOUNDARY")
     pdf.ln(8)
     pdf.set_font("Helvetica", "", 9)
-    pdf.multi_cell(178, 6, latin(evaluation.claim_boundary or analysis["claim_boundary"]))
+    pdf.multi_cell(178, 6, latin(decision_record.claim_boundary))
     pdf.ln(5)
     pdf.set_text_color(98, 105, 99)
-    pdf.multi_cell(178, 5, latin("Release %s | Analysis %s | Dataset %s | Approved by %s" % (
-        evaluation.release_version, evaluation.analysis_version, (evaluation.dataset_sha256 or "unavailable")[:20], evaluation.approved_by or evaluation.decision_owner
+    pdf.multi_cell(178, 5, latin("Release %s | Evidence E%s | Decision D%s | Analysis %s | Approved by %s" % (
+        evaluation.release_version, decision_record.evidence_revision, decision_record.revision, evaluation.analysis_version, decision_record.approved_by
+    )))
+    pdf.multi_cell(178, 5, latin("Dataset SHA-256: %s\nDecision SHA-256: %s" % (
+        decision_record.dataset_sha256, decision_record.record_sha256
     )))
     content = bytes(pdf.output())
-    filename = "%s-evidence-brief.pdf" % _slug(evaluation.name)
+    filename = "%s-release-record.pdf" % _slug(evaluation.name)
     return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": 'attachment; filename="%s"' % filename})
 
 
