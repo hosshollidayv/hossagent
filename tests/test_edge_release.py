@@ -70,6 +70,22 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertIn("@media (max-width: 720px)", css)
         self.assertIn("grid-template-columns: 1fr", css)
 
+    def test_missing_product_pipeline_health_surfaces_are_protected_and_rendered(self):
+        worker = (ROOT / "edge" / "worker.js").read_text()
+        operator = (ROOT / "templates" / "operator.html").read_text()
+        template = (ROOT / "templates" / "pipeline_health.html").read_text()
+        css = (ROOT / "static" / "pipeline-health.css").read_text()
+        config = (ROOT / "pipeline_health.py").read_text()
+        for slug in ("public-sector", "private-sector", "property-intelligence"):
+            self.assertIn(f'"/{slug}/pipeline"', worker)
+            self.assertIn(f'href="/{slug}/pipeline"', operator)
+            self.assertIn(f'"{slug}"', config)
+        self.assertIn('new URL("/operator", request.url)', worker)
+        self.assertIn('"pipeline-health"', worker)
+        self.assertIn("Illustrative state", template)
+        self.assertIn("Connect a product data service", template)
+        self.assertIn("@media (max-width: 760px)", css)
+
 
 if __name__ == "__main__":
     unittest.main()
