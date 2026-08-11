@@ -112,6 +112,13 @@ async function requestAccessPage(request, env) {
   return new Response(body, { status: origin.status, headers });
 }
 
+export function operatorHtmlForViewer(operatorHtml, ownerAuthorized) {
+  if (ownerAuthorized) return operatorHtml;
+  return operatorHtml
+    .replace(/<!-- OWNER_ONLY_START -->[\s\S]*?<!-- OWNER_ONLY_END -->/, "")
+    .replace('class="operator-hero"', 'class="operator-hero operator-hero-member"');
+}
+
 async function operatorPage(request, env) {
   let originRequest = request;
   if (env.EDGE_ORIGIN) {
@@ -131,13 +138,33 @@ async function operatorPage(request, env) {
   }));
   if (!operatorAsset.ok) return origin;
 
+  let ownerAuthorized = false;
+  try {
+    const ownerUrl = new URL("/api/admin/stats", request.url);
+    if (env.EDGE_ORIGIN) {
+      ownerUrl.protocol = "https:";
+      ownerUrl.host = env.EDGE_ORIGIN;
+    }
+    const ownerProbe = await fetch(new Request(ownerUrl, {
+      method: "GET",
+      headers: request.headers,
+      redirect: "manual",
+    }));
+    ownerAuthorized = ownerProbe.status === 200 && (ownerProbe.headers.get("content-type") || "").includes("application/json");
+  } catch (_error) {
+    ownerAuthorized = false;
+  }
+
   const headers = new Headers(origin.headers);
   headers.delete("content-length");
   headers.set("Content-Type", "text/html; charset=utf-8");
   headers.set("X-HossAgent-Edge", "operator-command");
   headers.set("Content-Security-Policy", SECURITY_POLICY);
   headers.set("Cache-Control", "no-store");
-  const body = request.method === "HEAD" ? null : operatorAsset.body;
+  let body = null;
+  if (request.method !== "HEAD") {
+    body = operatorHtmlForViewer(await operatorAsset.text(), ownerAuthorized);
+  }
   return new Response(body, { status: 200, headers });
 }
 
