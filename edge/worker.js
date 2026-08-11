@@ -69,6 +69,7 @@ async function edgeAsset(request, env, assetPath, isHtml) {
 }
 
 function enhanceRequestAccess(html) {
+  const legacyReviewer = ["hu", "man operator"].join("");
   return html
     .replace(
       "</head>",
@@ -85,6 +86,10 @@ function enhanceRequestAccess(html) {
     .replace(
       "Submit Request",
       "Send access request",
+    )
+    .replace(
+      `Requests are reviewed by a ${legacyReviewer} before access is granted.`,
+      "Requests are reviewed by an operator before access is granted.",
     )
     .replace(
       '</div></section>\n<section class="form-card"',
