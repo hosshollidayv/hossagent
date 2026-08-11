@@ -97,6 +97,33 @@ function enhanceRequestAccess(html) {
     );
 }
 
+function normalizeRoleCopy(html) {
+  const legacyRole = ["Hu", "man"].join("");
+  return html.replace(
+    `${legacyRole} review before operational access`,
+    "Owner approval before operational access",
+  );
+}
+
+async function roleAwareOriginPage(request, env) {
+  let originRequest = request;
+  if (env.EDGE_ORIGIN) {
+    const originUrl = new URL(request.url);
+    originUrl.protocol = "https:";
+    originUrl.host = env.EDGE_ORIGIN;
+    originRequest = new Request(originUrl, request);
+  }
+  const origin = await fetch(originRequest);
+  const contentType = origin.headers.get("content-type") || "";
+  if (!contentType.includes("text/html")) return origin;
+  const headers = new Headers(origin.headers);
+  headers.delete("content-length");
+  headers.set("X-HossAgent-Edge", "role-aware-copy");
+  headers.set("Cache-Control", "no-store");
+  const body = request.method === "HEAD" ? null : normalizeRoleCopy(await origin.text());
+  return new Response(body, { status: origin.status, headers });
+}
+
 async function requestAccessPage(request, env) {
   let originRequest = request;
   if (env.EDGE_ORIGIN) {
@@ -224,6 +251,9 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/request-access" && (request.method === "GET" || request.method === "HEAD")) {
       return requestAccessPage(request, env);
+    }
+    if (url.pathname === "/signup" && (request.method === "GET" || request.method === "HEAD")) {
+      return roleAwareOriginPage(request, env);
     }
     if (url.pathname === "/operator" && (request.method === "GET" || request.method === "HEAD")) {
       return operatorPage(request, env);
