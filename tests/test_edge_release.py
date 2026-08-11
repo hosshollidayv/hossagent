@@ -49,6 +49,12 @@ class EdgeReleaseTest(unittest.TestCase):
             "Requests are reviewed by an operator before access is granted.", worker
         )
 
+    def test_signup_uses_account_owner_language(self):
+        worker = (ROOT / "edge" / "worker.js").read_text()
+        self.assertIn('url.pathname === "/signup"', worker)
+        self.assertIn("roleAwareOriginPage", worker)
+        self.assertIn("Owner approval before operational access", worker)
+
     def test_operator_command_represents_the_full_portfolio(self):
         page = (ROOT / "templates" / "operator.html").read_text()
         css = (ROOT / "static" / "operator.css").read_text()
@@ -121,24 +127,17 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertIn("window.setTimeout(runAllRepairs, 900)", script)
         self.assertIn("pipeline-health.js", worker)
 
-    def test_customer_copy_uses_operator_language(self):
-        customer_facing_files = (
-            "mission_intelligence.py",
-            "pipeline_health.py",
-            "product_demos.py",
-            "edge/worker.js",
-            "static/mission-demo.js",
-            "static/pipeline-health.js",
-            "templates/demos.html",
-            "templates/marketing_landing.html",
-            "templates/mission_demo.html",
-            "templates/mission_intelligence.html",
-            "templates/operator.html",
-            "templates/pipeline_health.html",
-        )
-        for relative_path in customer_facing_files:
-            copy = (ROOT / relative_path).read_text().lower()
-            self.assertNotIn("human", copy, relative_path)
+    def test_customer_copy_uses_role_aware_language(self):
+        customer_facing_files = {
+            *list((ROOT / "templates").glob("*.html")),
+            *list((ROOT / "static").glob("*.js")),
+            ROOT / "mission_intelligence.py",
+            ROOT / "pipeline_health.py",
+            ROOT / "product_demos.py",
+            ROOT / "edge" / "worker.js",
+        }
+        for path in sorted(customer_facing_files):
+            self.assertNotRegex(path.read_text(), r"(?i)\bhuman\b", str(path))
 
 
 if __name__ == "__main__":
