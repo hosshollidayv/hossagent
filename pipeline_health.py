@@ -33,6 +33,11 @@ PIPELINE_HEALTH = {
             ("Harbor logistics", "Opportunity resolution", "Two agencies share the working title", "Disambiguate"),
             ("Cedar sustainment", "Packet readiness", "Funding source is older than 90 days", "Refresh evidence"),
         ],
+        "repairs": {
+            "Opportunity resolution": ("Re-resolve identities", "Canonical agency records selected; conflicting titles retained as aliases."),
+            "Partner posture": ("Verify access paths", "Unsupported access claims isolated; only corroborated partner paths remain eligible."),
+            "Packet readiness": ("Refresh stale evidence", "Funding evidence refreshed and incomplete packets held outside the release set."),
+        },
     },
     "private-sector": {
         "product_name": "Private Sector HossAgent",
@@ -66,6 +71,11 @@ PIPELINE_HEALTH = {
             ("Relay Commerce", "Pain hypothesis", "Expansion signal does not prove operational pain", "Narrow claim"),
             ("Blue Mesa Health", "Motion readiness", "No permitted contact channel found", "Hold motion"),
         ],
+        "repairs": {
+            "Pain hypothesis": ("Narrow unsupported claims", "Weak pain claims removed; remaining hypotheses are bounded to sourced signals."),
+            "Buyer verification": ("Re-verify relevant buyers", "Unverified people removed and role-level gaps returned for human review."),
+            "Motion readiness": ("Recheck permitted channels", "Unsafe channels suppressed; releasable briefs now contain verified paths only."),
+        },
     },
     "property-intelligence": {
         "product_name": "Property Intelligence",
@@ -83,7 +93,7 @@ PIPELINE_HEALTH = {
         "demo_url": "/property-intelligence/demo",
         "stages": [
             ("01", "Event intake", "22 events", "21 primary records", "healthy", "Healthy"),
-            ("02", "Parcel resolution", "21 events", "20 exact parcels", "healthy", "Healthy"),
+            ("02", "Parcel resolution", "21 events", "1 multi-parcel conflict", "watch", "Review"),
             ("03", "Ownership chain", "20 parcels", "18 current owners", "watch", "Review"),
             ("04", "Channel provenance", "18 owners", "2 unsafe channels", "blocked", "Blocked"),
             ("05", "Motion approval", "16 briefs", "15 operator-ready", "healthy", "Healthy"),
@@ -99,5 +109,10 @@ PIPELINE_HEALTH = {
             ("Weston mixed-use", "Ownership chain", "Recent deed transfer is not yet corroborated", "Refresh deed"),
             ("Doral reroof", "Parcel resolution", "Permit address spans two adjacent parcels", "Resolve parcel"),
         ],
+        "repairs": {
+            "Parcel resolution": ("Re-run parcel matching", "Ambiguous address split into candidate parcels; exact match retained and conflict held."),
+            "Ownership chain": ("Refresh ownership records", "Recent transfers rechecked; uncorroborated owner claims removed from the eligible set."),
+            "Channel provenance": ("Revalidate channel permission", "Unclear phone sources suppressed; verified channels remain available for review."),
+        },
     },
 }

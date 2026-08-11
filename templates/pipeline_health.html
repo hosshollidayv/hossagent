@@ -8,8 +8,9 @@
   <link rel="stylesheet" href="/static/web.css">
   <link rel="stylesheet" href="/static/operator.css">
   <link rel="stylesheet" href="/static/pipeline-health.css">
+  <script src="/static/pipeline-health.js" defer></script>
 </head>
-<body class="pipeline-body %%THEME%%-pipeline">
+<body class="pipeline-body %%THEME%%-pipeline" data-pipeline-repair data-health-baseline="%%HEALTH_NUMBER%%">
   <a class="skip-link" href="#main">Skip to pipeline health</a>
   <header class="operator-header pipeline-header">
     <a class="brand operator-brand" href="/operator" aria-label="HossAgent operator command"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span><span class="brand-division">%%DIVISION%%</span></a>
@@ -23,14 +24,23 @@
         <p class="pipeline-kicker">%%PRODUCT_NAME%% · Pipeline health</p>
         <h1 id="pipeline-title">%%HEADLINE%%</h1>
         <p>%%LEDE%%</p>
-        <div class="pipeline-actions"><a class="button pipeline-primary" href="#blockers">Review blockers <span aria-hidden="true">↓</span></a><a href="%%DEMO_URL%%">Open guided workflow <span aria-hidden="true">↗</span></a></div>
+        <div class="pipeline-actions"><button class="button pipeline-primary" id="repair-all" type="button">Repair all broken stages <span aria-hidden="true">→</span></button><a href="%%DEMO_URL%%">Open guided workflow <span aria-hidden="true">↗</span></a></div>
       </div>
       <aside class="pipeline-health-card" aria-label="Illustrative pipeline health">
-        <header><span>%%HEALTH_LABEL%%</span><em>Illustrative state</em></header>
-        <div class="pipeline-score"><strong>%%HEALTH_VALUE%%</strong><span>%%HEALTH_NOTE%%</span></div>
+        <header><span id="health-label">%%HEALTH_LABEL%%</span><em id="repair-mode">Auto-repair armed</em></header>
+        <div class="pipeline-score"><strong id="health-score">%%HEALTH_VALUE%%</strong><span id="health-note">%%HEALTH_NOTE%%</span></div>
         <div class="pipeline-decision"><small>Decision this pipeline supports</small><strong>%%DECISION%%</strong></div>
         <div class="pipeline-boundary"><small>Governing guardrail</small><p>%%GUARDRAIL%%</p></div>
       </aside>
+    </section>
+
+    <section class="repair-console" id="repair-console" aria-labelledby="repair-title">
+      <div class="repair-console-copy"><p class="pipeline-kicker">Autonomous remediation</p><h2 id="repair-title">Detect. Repair. Re-check. Escalate only what remains.</h2><p>Bounded repairs run automatically on this illustrative pipeline. The system may refresh evidence, re-resolve identities, narrow claims, or suppress unsafe records. It cannot release the final artifact without a human decision.</p></div>
+      <div class="repair-runner">
+        <header><div><span class="repair-live"><i></i><b id="repair-status">Watching for broken stages</b></span><small id="repair-count">0 repairs completed</small></div><button id="repair-reset" type="button">Reset run</button></header>
+        <ol id="repair-log" class="repair-log" aria-live="polite" aria-label="Repair activity"><li class="repair-placeholder"><span>Ready</span><p>Broken stages will be repaired in dependency order.</p></li></ol>
+        <footer><div><small>Release authority</small><strong id="release-state">Held until repairs finish</strong></div><button class="button pipeline-approve" id="approve-repaired" type="button" disabled>Approve repaired set</button></footer>
+      </div>
     </section>
 
     <section class="pipeline-section" id="stages" aria-labelledby="stages-title">
@@ -49,7 +59,7 @@
         <div class="pipeline-blocker blocker-labels" role="row"><span role="columnheader">Work item</span><span role="columnheader">Stage</span><span role="columnheader">Why it is blocked</span><span role="columnheader">Operator move</span></div>
         %%BLOCKERS%%
       </div>
-      <div class="pipeline-disclosure"><span>Interface state</span><strong>Illustrative only</strong><p>Connect a product data service before treating counts, health percentages, or blocker states as production telemetry.</p></div>
+      <div class="pipeline-disclosure"><span>Interface state</span><strong>Illustrative repair controls</strong><p>These controls repair the protected interface fixture. Product connectors must be live before the same actions can mutate production systems.</p></div>
     </section>
   </main>
 

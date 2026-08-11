@@ -75,6 +75,7 @@ class EdgeReleaseTest(unittest.TestCase):
         operator = (ROOT / "templates" / "operator.html").read_text()
         template = (ROOT / "templates" / "pipeline_health.html").read_text()
         css = (ROOT / "static" / "pipeline-health.css").read_text()
+        script = (ROOT / "static" / "pipeline-health.js").read_text()
         config = (ROOT / "pipeline_health.py").read_text()
         for slug in ("public-sector", "private-sector", "property-intelligence"):
             self.assertIn(f'"/{slug}/pipeline"', worker)
@@ -83,9 +84,16 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertIn('new URL("/operator", request.url)', worker)
         self.assertIn('redirect: "manual"', worker)
         self.assertIn('"pipeline-health"', worker)
-        self.assertIn("Illustrative state", template)
-        self.assertIn("Connect a product data service", template)
+        self.assertIn("Illustrative pipeline health", template)
+        self.assertIn("Product connectors must be live", template)
         self.assertIn("@media (max-width: 760px)", css)
+        self.assertIn("Repair all broken stages", template)
+        self.assertIn("Approve repaired set", template)
+        self.assertIn("runAllRepairs", script)
+        self.assertIn("repairStage", script)
+        self.assertIn("sessionStorage", script)
+        self.assertIn("window.setTimeout(runAllRepairs, 900)", script)
+        self.assertIn("pipeline-health.js", worker)
 
 
 if __name__ == "__main__":
