@@ -149,6 +149,7 @@ async function pipelineHealthPage(request, env, assetPath) {
   const authRequest = new Request(authUrl, {
     method: request.method,
     headers: request.headers,
+    redirect: "manual",
   });
   const origin = await fetch(authRequest);
   const contentType = origin.headers.get("content-type") || "";
