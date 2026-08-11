@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="HossAgent operator command center for every evidence-to-decision product surface.">
+  <title>Operator Command — HossAgent</title>
+  <link rel="stylesheet" href="/static/web.css">
+  <link rel="stylesheet" href="/static/operator.css">
+</head>
+<body class="operator-body">
+  <a class="skip-link" href="#main">Skip to command center</a>
+  <header class="operator-header">
+    <a class="brand operator-brand" href="/" aria-label="HossAgent home"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span><span class="brand-division">Operator command</span></a>
+    <nav class="operator-nav" aria-label="Operator navigation"><a href="#portfolio">Products</a><a href="#queue">Decision queue</a><a href="#surfaces">Surface map</a></nav>
+    <div class="operator-session"><span><i></i>Protected session</span><a href="/logout">Sign out</a></div>
+  </header>
+
+  <main id="main">
+    <section class="operator-hero" aria-labelledby="operator-title">
+      <div class="operator-hero-copy">
+        <p class="operator-kicker">Portfolio command · 04 decision engines</p>
+        <h1 id="operator-title">Every surface.<br>One operator view.</h1>
+        <p>Move across the full HossAgent portfolio without losing the evidence trail, the governing guardrail, or the human who owns the next decision.</p>
+        <div class="operator-hero-actions"><a class="button button-light" href="#queue">Review decision queue <span aria-hidden="true">↓</span></a><a class="operator-text-link" href="/demos">Open customer demos <span aria-hidden="true">↗</span></a></div>
+      </div>
+      <aside class="operator-pulse" aria-label="Portfolio posture">
+        <header><span>Portfolio posture</span><em>Live registry</em></header>
+        <div class="pulse-summary"><strong>4/4</strong><span>product surfaces represented</span></div>
+        <ol>
+          <li><span class="product-glyph public">P</span><div><strong>Public Sector</strong><small>Pursuit intelligence</small></div><em>Ready</em></li>
+          <li><span class="product-glyph mission">MI</span><div><strong>Mission Intelligence</strong><small>Release evidence</small></div><em class="watch">Review</em></li>
+          <li><span class="product-glyph private">B2B</span><div><strong>Private Sector</strong><small>Account intelligence</small></div><em>Ready</em></li>
+          <li><span class="product-glyph property">RE</span><div><strong>Property Intelligence</strong><small>Owner intelligence</small></div><em>Ready</em></li>
+        </ol>
+      </aside>
+    </section>
+
+    <section class="operator-section portfolio-section" id="portfolio" aria-labelledby="portfolio-title">
+      <div class="operator-section-head">
+        <div><p class="operator-kicker">Product portfolio</p><h2 id="portfolio-title">Four decisions, fully represented.</h2></div>
+        <p>Each engine has its own evidence model and no-go conditions. They share one operating discipline: corroborate first, explain the recommendation, retain human authority.</p>
+      </div>
+      <div class="operator-product-grid">
+        <article class="operator-product public-product">
+          <header><span class="product-glyph public">P</span><div><p>01 · Public Sector</p><small>Pursuit intelligence</small></div><em>Signal → packet</em></header>
+          <h3>Decide if a program signal deserves pursuit.</h3>
+          <dl><div><dt>Evidence</dt><dd>Need, funding, access, partner posture</dd></div><div><dt>Guardrail</dt><dd>No pursuit without a credible path to mission</dd></div><div><dt>Artifact</dt><dd>Source-backed pursuit packet</dd></div></dl>
+          <footer><a href="/#public-sector">Product surface</a><a href="/public-sector/demo">Guided demo <span aria-hidden="true">▶</span></a></footer>
+        </article>
+        <article class="operator-product mission-product">
+          <header><span class="product-glyph mission">MI</span><div><p>02 · Mission Intelligence</p><small>Release evidence</small></div><em>Release → brief</em></header>
+          <h3>Decide if a software release should expand.</h3>
+          <dl><div><dt>Evidence</dt><dd>Exposure, workflow, outcome, cohort risk</dd></div><div><dt>Guardrail</dt><dd>Operational safety outranks the average</dd></div><div><dt>Artifact</dt><dd>Reproducible evidence brief</dd></div></dl>
+          <footer><a href="/mission-intelligence">Product surface</a><a href="/mission-intelligence/pilot">Pilot workspace</a><a href="/mission-intelligence/demo">Guided demo <span aria-hidden="true">▶</span></a></footer>
+        </article>
+        <article class="operator-product private-product">
+          <header><span class="product-glyph private">B2B</span><div><p>03 · Private Sector</p><small>Account intelligence</small></div><em>Signal → brief</em></header>
+          <h3>Decide if an account is ready for a relevant motion.</h3>
+          <dl><div><dt>Evidence</dt><dd>Company, pain, readiness, verified buyer</dd></div><div><dt>Guardrail</dt><dd>No nuisance outbound or invented urgency</dd></div><div><dt>Artifact</dt><dd>Buyer-ready account brief</dd></div></dl>
+          <footer><a href="/#private-sector">Product surface</a><a href="/private-sector/demo">Guided demo <span aria-hidden="true">▶</span></a></footer>
+        </article>
+        <article class="operator-product property-product">
+          <header><span class="product-glyph property">RE</span><div><p>04 · Property Intelligence</p><small>Owner intelligence</small></div><em>Event → motion</em></header>
+          <h3>Decide if a property event supports owner outreach.</h3>
+          <dl><div><dt>Evidence</dt><dd>Event, parcel, ownership, safe channel</dd></div><div><dt>Guardrail</dt><dd>No action on ambiguous ownership</dd></div><div><dt>Artifact</dt><dd>Owner-qualified property brief</dd></div></dl>
+          <footer><a href="/#property-intelligence">Product surface</a><a href="/property-intelligence/demo">Guided demo <span aria-hidden="true">▶</span></a></footer>
+        </article>
+      </div>
+    </section>
+
+    <section class="operator-section queue-section" id="queue" aria-labelledby="queue-title">
+      <div class="operator-section-head queue-head">
+        <div><p class="operator-kicker">Cross-product review</p><h2 id="queue-title">The decisions that need a human.</h2></div>
+        <div class="queue-legend"><span><i class="green"></i>Ready</span><span><i class="amber"></i>Review</span><span><i class="red"></i>Blocked</span></div>
+      </div>
+      <div class="decision-queue" role="table" aria-label="Portfolio decision queue">
+        <div class="queue-row queue-labels" role="row"><span role="columnheader">Surface</span><span role="columnheader">Decision</span><span role="columnheader">Evidence posture</span><span role="columnheader">Status</span><span role="columnheader">Operator move</span></div>
+        <div class="queue-row" role="row"><span role="cell"><b class="product-glyph mission">MI</b><strong>Mission Intelligence</strong></span><span role="cell">Expand release v2</span><span role="cell">32 runs · cohort breach</span><span role="cell"><em class="status review">Review</em></span><span role="cell"><a href="/mission-intelligence/pilot">Open workspace →</a></span></div>
+        <div class="queue-row" role="row"><span role="cell"><b class="product-glyph public">P</b><strong>Public Sector</strong></span><span role="cell">Qualify Atlas pursuit</span><span role="cell">4 sources · access verified</span><span role="cell"><em class="status ready">Ready</em></span><span role="cell"><a href="/public-sector/demo">Inspect decision →</a></span></div>
+        <div class="queue-row" role="row"><span role="cell"><b class="product-glyph private">B2B</b><strong>Private Sector</strong></span><span role="cell">Release account motion</span><span role="cell">Buyer found · channel missing</span><span role="cell"><em class="status blocked">Blocked</em></span><span role="cell"><a href="/private-sector/demo">Inspect guardrail →</a></span></div>
+        <div class="queue-row" role="row"><span role="cell"><b class="product-glyph property">RE</b><strong>Property Intelligence</strong></span><span role="cell">Approve owner motion</span><span role="cell">Parcel + owner corroborated</span><span role="cell"><em class="status ready">Ready</em></span><span role="cell"><a href="/property-intelligence/demo">Inspect decision →</a></span></div>
+      </div>
+      <p class="synthetic-note">Illustrative portfolio state · no production customer or mission data is shown on this command surface.</p>
+    </section>
+
+    <section class="operator-section surface-section" id="surfaces" aria-labelledby="surface-title">
+      <div class="operator-section-head">
+        <div><p class="operator-kicker">Surface registry</p><h2 id="surface-title">Nothing hidden. Nothing orphaned.</h2></div>
+        <p>The complete customer and operator journey is routable from one map: discovery, proof, access, workspace, and account control.</p>
+      </div>
+      <div class="surface-map">
+        <article><span>01</span><div><strong>Discover</strong><p>Portfolio positioning and product boundaries.</p></div><a href="/">Open site ↗</a></article>
+        <article><span>02</span><div><strong>Understand</strong><p>How evidence becomes bounded action.</p></div><a href="/#how-it-works">Open method ↗</a></article>
+        <article><span>03</span><div><strong>Experience</strong><p>Four self-guided, no-login walkthroughs.</p></div><a href="/demos">Open demos ↗</a></article>
+        <article><span>04</span><div><strong>Evaluate</strong><p>Mission evidence pilot and decision workspace.</p></div><a href="/mission-intelligence/pilot">Open pilot ↗</a></article>
+        <article><span>05</span><div><strong>Request</strong><p>Human-reviewed access and pilot intake.</p></div><a href="/request-access">Open intake ↗</a></article>
+        <article><span>06</span><div><strong>Operate</strong><p>Account, subscription, and member controls.</p></div><a href="/portal">Open account ↗</a></article>
+      </div>
+    </section>
+
+    <section class="operator-governance" aria-labelledby="governance-title">
+      <div><p class="operator-kicker">Control remains human</p><h2 id="governance-title">The portfolio recommends.<br>The operator decides.</h2></div>
+      <ol><li><span>01</span><strong>Evidence lineage remains visible</strong></li><li><span>02</span><strong>Inferences stay labeled</strong></li><li><span>03</span><strong>No-go conditions block action</strong></li><li><span>04</span><strong>Every consequential move has an owner</strong></li></ol>
+    </section>
+  </main>
+
+  <footer class="operator-footer"><a class="brand brand-footer" href="/"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span></a><p>Protected operator surface · Evidence in. Explainable action out.</p><nav aria-label="Operator footer"><a href="/demos">Demos</a><a href="/portal/settings">Settings</a><a href="/logout">Sign out</a></nav></footer>
+</body>
+</html>
