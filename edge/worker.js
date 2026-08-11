@@ -119,6 +119,26 @@ export function operatorHtmlForViewer(operatorHtml, ownerAuthorized) {
     .replace('class="operator-hero"', 'class="operator-hero operator-hero-member"');
 }
 
+export function ownerClaimFromValidatedSession(request) {
+  const cookieHeader = request.headers.get("cookie") || "";
+  const sessionPair = cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith("hossagent_session="));
+  if (!sessionPair) return false;
+  const token = sessionPair.slice("hossagent_session=".length);
+  const payload = token.split(".")[0];
+  if (!payload) return false;
+  try {
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const claims = JSON.parse(atob(padded));
+    return claims.auth === true && claims.role === "owner";
+  } catch (_error) {
+    return false;
+  }
+}
+
 async function operatorPage(request, env) {
   let originRequest = request;
   if (env.EDGE_ORIGIN) {
@@ -138,22 +158,9 @@ async function operatorPage(request, env) {
   }));
   if (!operatorAsset.ok) return origin;
 
-  let ownerAuthorized = false;
-  try {
-    const ownerUrl = new URL("/api/admin/stats", request.url);
-    if (env.EDGE_ORIGIN) {
-      ownerUrl.protocol = "https:";
-      ownerUrl.host = env.EDGE_ORIGIN;
-    }
-    const ownerProbe = await fetch(new Request(ownerUrl, {
-      method: "GET",
-      headers: request.headers,
-      redirect: "manual",
-    }));
-    ownerAuthorized = ownerProbe.status === 200 && (ownerProbe.headers.get("content-type") || "").includes("application/json");
-  } catch (_error) {
-    ownerAuthorized = false;
-  }
+  // The origin's 200 response above is the signature-validation gate. Only after
+  // that succeeds do we trust the role claim inside the same signed session.
+  const ownerAuthorized = ownerClaimFromValidatedSession(request);
 
   const headers = new Headers(origin.headers);
   headers.delete("content-length");
