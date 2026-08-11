@@ -70,6 +70,20 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertIn("@media (max-width: 720px)", css)
         self.assertIn("grid-template-columns: 1fr", css)
 
+    def test_product_registry_is_server_gated_to_owner_session(self):
+        worker = (ROOT / "edge" / "worker.js").read_text()
+        page = (ROOT / "templates" / "operator.html").read_text()
+        css = (ROOT / "static" / "operator.css").read_text()
+        self.assertIn("<!-- OWNER_ONLY_START -->", page)
+        self.assertIn("<!-- OWNER_ONLY_END -->", page)
+        self.assertIn('new URL("/api/admin/stats", request.url)', worker)
+        self.assertIn("ownerProbe.status === 200", worker)
+        self.assertIn("ownerAuthorized = false", worker)
+        self.assertIn("OWNER_ONLY_START", worker)
+        self.assertIn("operatorHtmlForViewer", worker)
+        self.assertIn("operator-hero-member", worker)
+        self.assertIn(".operator-hero-member", css)
+
     def test_missing_product_pipeline_health_surfaces_are_protected_and_rendered(self):
         worker = (ROOT / "edge" / "worker.js").read_text()
         operator = (ROOT / "templates" / "operator.html").read_text()
