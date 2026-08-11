@@ -12,7 +12,7 @@ PIPELINE_HEALTH = {
         "health_label": "Evidence review",
         "health_value": "82%",
         "health_note": "2 stages need operator attention",
-        "guardrail": "No pursuit moves forward without corroborated need, a credible access path, and named human authority.",
+        "guardrail": "No pursuit moves forward without corroborated need, a credible access path, and named operator authority.",
         "artifact": "Pursuit packet",
         "demo_url": "/public-sector/demo",
         "stages": [
@@ -26,7 +26,7 @@ PIPELINE_HEALTH = {
             ("Primary-source coverage", "14 / 18", "78%", "watch"),
             ("Funding corroborated", "9 / 12", "75%", "watch"),
             ("Access path named", "6 / 9", "67%", "blocked"),
-            ("Human owner assigned", "6 / 6", "100%", "healthy"),
+            ("Decision owner assigned", "6 / 6", "100%", "healthy"),
         ],
         "blockers": [
             ("Atlas modernization", "Partner posture", "Access path is inferred, not verified", "Resolve or stop"),
@@ -73,7 +73,7 @@ PIPELINE_HEALTH = {
         ],
         "repairs": {
             "Pain hypothesis": ("Narrow unsupported claims", "Weak pain claims removed; remaining hypotheses are bounded to sourced signals."),
-            "Buyer verification": ("Re-verify relevant buyers", "Unverified people removed and role-level gaps returned for human review."),
+            "Buyer verification": ("Re-verify relevant buyers", "Unverified people removed and role-level gaps returned for operator review."),
             "Motion readiness": ("Recheck permitted channels", "Unsafe channels suppressed; releasable briefs now contain verified paths only."),
         },
     },

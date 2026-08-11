@@ -62,7 +62,7 @@ class MissionPilotTest(unittest.TestCase):
         module = (ROOT / "mission_intelligence.py").read_text()
         self.assertIn("Validate &amp; analyze", module)
         self.assertIn("Download PDF brief", module)
-        self.assertIn("Human-owned decision", module)
+        self.assertIn("Operator-owned decision", module)
         self.assertIn("get_customer_from_session", module)
         self.assertIn("Pilot Workspace", template)
 
