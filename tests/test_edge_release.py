@@ -67,6 +67,8 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertIn('url.pathname === "/logout"', worker)
         self.assertIn('url.pathname === "/admin/logout"', worker)
         self.assertIn('new URL("/login?logout=true", request.url)', worker)
+        self.assertIn("You have been signed out.", worker)
+        self.assertIn('searchParams.get("logout") === "true"', worker)
         self.assertIn("hossagent_session=;", worker)
         self.assertIn("hossagent_admin=;", worker)
         self.assertIn('"Cache-Control": "no-store"', worker)

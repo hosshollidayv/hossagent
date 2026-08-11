@@ -142,8 +142,8 @@ async function requestAccessPage(request, env) {
   return new Response(body, { status: origin.status, headers });
 }
 
-function enhanceLogin(html) {
-  return html
+function enhanceLogin(html, loggedOut = false) {
+  let enhanced = html
     .replace(
       "Sign in with your HossAgent account. The separate owner bootstrap path remains available for emergency operator access.",
       "Sign in to owner-only operating and troubleshooting workspaces.",
@@ -156,6 +156,13 @@ function enhanceLogin(html) {
       'New to HossAgent? <a href="/signup">Create an account</a>.',
       'Looking for product access? <a href="/request-access">Request early access</a>.',
     );
+  if (loggedOut) {
+    enhanced = enhanced.replace(
+      '</div><form method="post" action="/login">',
+      '</div><div class="pilot-notice" role="status">You have been signed out.</div><form method="post" action="/login">',
+    );
+  }
+  return enhanced;
 }
 
 export function logoutResponse(request) {
@@ -186,7 +193,8 @@ async function loginPage(request, env) {
   headers.delete("content-length");
   headers.set("X-HossAgent-Edge", "owner-login");
   headers.set("Cache-Control", "no-store");
-  const body = request.method === "HEAD" ? null : enhanceLogin(await origin.text());
+  const loggedOut = new URL(request.url).searchParams.get("logout") === "true";
+  const body = request.method === "HEAD" ? null : enhanceLogin(await origin.text(), loggedOut);
   return new Response(body, { status: origin.status, headers });
 }
 
