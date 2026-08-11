@@ -52,6 +52,10 @@ class EdgeReleaseTest(unittest.TestCase):
     def test_operator_command_represents_the_full_portfolio(self):
         page = (ROOT / "templates" / "operator.html").read_text()
         css = (ROOT / "static" / "operator.css").read_text()
+        self.assertIn("Four decision engines.<br>One command center.", page)
+        self.assertIn("From first signal to decisive action.", page)
+        self.assertNotIn("Nothing hidden. Nothing orphaned.", page)
+        self.assertNotIn("Surface registry", page)
         for product in (
             "Public Sector",
             "Mission Intelligence",
