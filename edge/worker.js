@@ -122,6 +122,21 @@ function enhanceRequestAccess(html) {
     );
 }
 
+export function requestAccessSuccessHtml() {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Request received — HossAgent</title><link rel="stylesheet" href="/static/web.css"><link rel="stylesheet" href="/static/request-access.css"></head>
+<body class="auth-body request-success"><a class="skip-link" href="#main">Skip to content</a><header class="simple-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span></a><a class="text-link" href="/demos">View product demos</a></header>
+<main class="auth-main request-main" id="main"><section class="auth-context"><p class="eyebrow">Request received</p><h1>We have what we need.</h1><p>We’ll review your use case and follow up with the clearest next step.</p><div class="request-modes"><div><strong>Evidence first</strong><span>We start with the decision you need to make</span></div><div><strong>Clear follow-up</strong><span>You’ll hear from us at your work email</span></div></div></section>
+<section class="form-card request-success-card" aria-labelledby="confirmation-title"><div class="success-mark" aria-hidden="true">✓</div><div class="form-heading"><p class="eyebrow">Submission complete</p><h2 id="confirmation-title">Your request is in.</h2><p>No additional setup is required.</p></div><ol class="success-steps"><li><span>01</span><div><strong>Fit review</strong><p>We’ll review the workflow, evidence, and decision described in your request.</p></div></li><li><span>02</span><div><strong>Direct response</strong><p>We’ll follow up with a practical next step at the email you provided.</p></div></li></ol><div class="success-actions"><a class="button" href="/demos">Watch the demos <span aria-hidden="true">→</span></a><a class="text-link" href="/">Return home</a></div></section></main></body></html>`;
+}
+
+export function requestAccessHtml(html, method = "GET") {
+  const submitted = method === "POST" && (
+    html.includes("Request received. We’ll review it before granting access.")
+    || html.includes("Request received. We'll review it before granting access.")
+  );
+  return submitted ? requestAccessSuccessHtml() : enhanceRequestAccess(html);
+}
+
 async function requestAccessPage(request, env) {
   let originRequest = request;
   if (env.EDGE_ORIGIN) {
@@ -138,7 +153,7 @@ async function requestAccessPage(request, env) {
   headers.set("X-HossAgent-Edge", "request-access");
   headers.set("Content-Security-Policy", SECURITY_POLICY);
   headers.set("Cache-Control", "no-store");
-  const body = request.method === "HEAD" ? null : enhanceRequestAccess(await origin.text());
+  const body = request.method === "HEAD" ? null : requestAccessHtml(await origin.text(), request.method);
   return new Response(body, { status: origin.status, headers });
 }
 
@@ -340,7 +355,9 @@ export default {
     if (url.pathname === "/signup" || url.pathname === "/signup/") {
       return Response.redirect(new URL("/request-access", request.url), 303);
     }
-    if (url.pathname === "/request-access" && (request.method === "GET" || request.method === "HEAD")) {
+    if (url.pathname === "/request-access" && (
+      request.method === "GET" || request.method === "HEAD" || request.method === "POST"
+    )) {
       return requestAccessPage(request, env);
     }
     if (url.pathname === "/login" && (request.method === "GET" || request.method === "HEAD")) {
