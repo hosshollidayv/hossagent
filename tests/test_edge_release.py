@@ -19,6 +19,8 @@ class EdgeReleaseTest(unittest.TestCase):
         ):
             self.assertIn(route, worker)
         self.assertIn("return fetch(request)", worker)
+        self.assertIn('url.pathname === "/request-access"', worker)
+        self.assertIn("enhanceRequestAccess", worker)
 
     def test_worker_targets_hossagent_without_origin_changes(self):
         config = (ROOT / "wrangler.jsonc").read_text()
@@ -31,6 +33,15 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertIn('type="application/json"', page)
         self.assertNotIn("window.HOSS_PRODUCT_DEMO =", page)
         self.assertIn("JSON.parse(configNode.textContent)", script)
+
+    def test_request_access_keeps_the_origin_form_and_adds_responsive_styles(self):
+        worker = (ROOT / "edge" / "worker.js").read_text()
+        css = (ROOT / "static" / "request-access.css").read_text()
+        self.assertIn("const origin = await fetch(originRequest)", worker)
+        self.assertIn("request-access.css", worker)
+        self.assertIn("@media (max-width: 620px)", css)
+        self.assertIn("font-size: 16px", css)
+        self.assertIn(".form-card input:focus", css)
 
 
 if __name__ == "__main__":

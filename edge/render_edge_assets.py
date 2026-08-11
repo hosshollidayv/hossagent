@@ -56,6 +56,7 @@ for filename in (
     "mission-demo.js",
     "portfolio-demo.css",
     "product-demo.js",
+    "request-access.css",
 ):
     shutil.copy2(ROOT / "static" / filename, static_output / filename)
 
