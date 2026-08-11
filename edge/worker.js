@@ -20,6 +20,7 @@ const EDGE_ASSETS = new Set([
   "/static/mission-demo.js",
   "/static/portfolio-demo.css",
   "/static/product-demo.js",
+  "/static/request-access.css",
 ]);
 
 const SECURITY_POLICY = [
@@ -55,9 +56,56 @@ async function edgeAsset(request, env, assetPath, isHtml) {
   return new Response(asset.body, { status: asset.status, headers });
 }
 
+function enhanceRequestAccess(html) {
+  return html
+    .replace(
+      "</head>",
+      '<link rel="stylesheet" href="/static/request-access.css"></head>',
+    )
+    .replace(
+      "HossAgent access is reviewed before it is granted. This form records your request locally for operator review; it does not send an email.",
+      "Tell us where the decision chain is breaking. A human operator will review the fit, the evidence available, and the safest next step.",
+    )
+    .replace(
+      "All fields are required.",
+      "Five fields. About two minutes.",
+    )
+    .replace(
+      "Submit Request",
+      "Send access request",
+    )
+    .replace(
+      '</div></section>\n<section class="form-card"',
+      '</div><div class="access-expectations"><div><span>01 · Review</span><strong>A human reads every request</strong></div><div><span>02 · Fit</span><strong>We map the right decision engine</strong></div><div><span>03 · Next step</span><strong>You get a bounded pilot path</strong></div></div></section>\n<section class="form-card"',
+    );
+}
+
+async function requestAccessPage(request, env) {
+  let originRequest = request;
+  if (env.EDGE_ORIGIN) {
+    const originUrl = new URL(request.url);
+    originUrl.protocol = "https:";
+    originUrl.host = env.EDGE_ORIGIN;
+    originRequest = new Request(originUrl, request);
+  }
+  const origin = await fetch(originRequest);
+  const contentType = origin.headers.get("content-type") || "";
+  if (!contentType.includes("text/html")) return origin;
+  const headers = new Headers(origin.headers);
+  headers.delete("content-length");
+  headers.set("X-HossAgent-Edge", "request-access");
+  headers.set("Content-Security-Policy", SECURITY_POLICY);
+  headers.set("Cache-Control", "no-store");
+  const body = request.method === "HEAD" ? null : enhanceRequestAccess(await origin.text());
+  return new Response(body, { status: origin.status, headers });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/request-access" && (request.method === "GET" || request.method === "HEAD")) {
+      return requestAccessPage(request, env);
+    }
     const pageAsset = EDGE_ROUTES.get(url.pathname);
     if (pageAsset && (request.method === "GET" || request.method === "HEAD")) {
       return edgeAsset(request, env, pageAsset, true);
