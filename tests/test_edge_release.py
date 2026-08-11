@@ -62,6 +62,16 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertIn("Use your owner credentials.", worker)
         self.assertIn("Request early access", worker)
 
+    def test_logout_clears_sessions_and_returns_to_login(self):
+        worker = (ROOT / "edge" / "worker.js").read_text()
+        self.assertIn('url.pathname === "/logout"', worker)
+        self.assertIn('url.pathname === "/admin/logout"', worker)
+        self.assertIn('new URL("/login?logout=true", request.url)', worker)
+        self.assertIn("hossagent_session=;", worker)
+        self.assertIn("hossagent_admin=;", worker)
+        self.assertIn('"Cache-Control": "no-store"', worker)
+        self.assertIn('"X-HossAgent-Edge": "session-logout"', worker)
+
     def test_operator_command_represents_the_full_portfolio(self):
         page = (ROOT / "templates" / "operator.html").read_text()
         css = (ROOT / "static" / "operator.css").read_text()
