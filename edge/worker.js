@@ -23,6 +23,7 @@ const EDGE_ASSETS = new Set([
   "/static/request-access.css",
   "/static/operator.css",
   "/static/pipeline-health.css",
+  "/static/pipeline-health.js",
 ]);
 
 const PIPELINE_ROUTES = new Map([
