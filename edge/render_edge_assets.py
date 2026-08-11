@@ -31,6 +31,7 @@ write_template("marketing_landing.html", "index.html")
 write_template("demos.html", "demos/index.html")
 write_template("mission_intelligence.html", "mission-intelligence/index.html")
 write_template("mission_demo.html", "mission-intelligence/demo/index.html")
+write_template("operator.html", "operator/index.html")
 
 for slug, demo in PRODUCT_DEMOS.items():
     values = {
@@ -57,6 +58,7 @@ for filename in (
     "portfolio-demo.css",
     "product-demo.js",
     "request-access.css",
+    "operator.css",
 ):
     shutil.copy2(ROOT / "static" / filename, static_output / filename)
 

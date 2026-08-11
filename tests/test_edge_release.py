@@ -20,6 +20,9 @@ class EdgeReleaseTest(unittest.TestCase):
             self.assertIn(route, worker)
         self.assertIn("return fetch(request)", worker)
         self.assertIn('url.pathname === "/request-access"', worker)
+        self.assertIn('url.pathname === "/operator"', worker)
+        self.assertIn('origin.status !== 200', worker)
+        self.assertIn('"operator-command"', worker)
         self.assertIn("enhanceRequestAccess", worker)
 
     def test_worker_targets_hossagent_without_origin_changes(self):
@@ -42,6 +45,30 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertIn("@media (max-width: 620px)", css)
         self.assertIn("font-size: 16px", css)
         self.assertIn(".form-card input:focus", css)
+
+    def test_operator_command_represents_the_full_portfolio(self):
+        page = (ROOT / "templates" / "operator.html").read_text()
+        css = (ROOT / "static" / "operator.css").read_text()
+        for product in (
+            "Public Sector",
+            "Mission Intelligence",
+            "Private Sector",
+            "Property Intelligence",
+        ):
+            self.assertIn(product, page)
+        for route in (
+            'href="/public-sector/demo"',
+            'href="/mission-intelligence/demo"',
+            'href="/mission-intelligence/pilot"',
+            'href="/private-sector/demo"',
+            'href="/property-intelligence/demo"',
+            'href="/demos"',
+            'href="/request-access"',
+            'href="/portal"',
+        ):
+            self.assertIn(route, page)
+        self.assertIn("@media (max-width: 720px)", css)
+        self.assertIn("grid-template-columns: 1fr", css)
 
 
 if __name__ == "__main__":

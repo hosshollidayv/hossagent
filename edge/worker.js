@@ -21,6 +21,7 @@ const EDGE_ASSETS = new Set([
   "/static/portfolio-demo.css",
   "/static/product-demo.js",
   "/static/request-access.css",
+  "/static/operator.css",
 ]);
 
 const SECURITY_POLICY = [
@@ -100,11 +101,43 @@ async function requestAccessPage(request, env) {
   return new Response(body, { status: origin.status, headers });
 }
 
+async function operatorPage(request, env) {
+  let originRequest = request;
+  if (env.EDGE_ORIGIN) {
+    const originUrl = new URL(request.url);
+    originUrl.protocol = "https:";
+    originUrl.host = env.EDGE_ORIGIN;
+    originRequest = new Request(originUrl, request);
+  }
+  const origin = await fetch(originRequest);
+  const contentType = origin.headers.get("content-type") || "";
+  if (origin.status !== 200 || !contentType.includes("text/html")) return origin;
+
+  const operatorUrl = new URL("/operator/index.html", request.url);
+  const operatorAsset = await env.ASSETS.fetch(new Request(operatorUrl, {
+    method: request.method,
+    headers: request.headers,
+  }));
+  if (!operatorAsset.ok) return origin;
+
+  const headers = new Headers(origin.headers);
+  headers.delete("content-length");
+  headers.set("Content-Type", "text/html; charset=utf-8");
+  headers.set("X-HossAgent-Edge", "operator-command");
+  headers.set("Content-Security-Policy", SECURITY_POLICY);
+  headers.set("Cache-Control", "no-store");
+  const body = request.method === "HEAD" ? null : operatorAsset.body;
+  return new Response(body, { status: 200, headers });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/request-access" && (request.method === "GET" || request.method === "HEAD")) {
       return requestAccessPage(request, env);
+    }
+    if (url.pathname === "/operator" && (request.method === "GET" || request.method === "HEAD")) {
+      return operatorPage(request, env);
     }
     const pageAsset = EDGE_ROUTES.get(url.pathname);
     if (pageAsset && (request.method === "GET" || request.method === "HEAD")) {
