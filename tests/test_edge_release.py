@@ -56,6 +56,11 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertIn("From first signal to decisive action.", page)
         self.assertNotIn("Nothing hidden. Nothing orphaned.", page)
         self.assertNotIn("Surface registry", page)
+        self.assertNotIn("fully represented", page)
+        self.assertNotIn("product surfaces represented", page)
+        self.assertNotIn("Route registry", page)
+        self.assertNotIn(">Mapped<", page)
+        self.assertNotIn(">Product surface<", page)
         for product in (
             "Public Sector",
             "Mission Intelligence",
