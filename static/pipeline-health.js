@@ -112,10 +112,10 @@
     if (repairCount) repairCount.textContent = `${count} of ${total} repairs completed`;
     if (count === total) {
       if (healthLabel) healthLabel.textContent = "Revalidated health";
-      if (healthNote) healthNote.textContent = "Repairable conditions cleared · human release decision remains";
+      if (healthNote) healthNote.textContent = "Repairable conditions cleared · operator release decision remains";
       if (repairStatus) repairStatus.textContent = "Pipeline repaired and rechecked";
       if (repairMode) repairMode.textContent = "Repair complete";
-      if (releaseState) releaseState.textContent = approved ? "Repaired set approved for decision queue" : "Ready for human approval";
+      if (releaseState) releaseState.textContent = approved ? "Repaired set approved for decision queue" : "Ready for operator approval";
       if (approve) {
         approve.disabled = approved;
         approve.textContent = approved ? "Approved ✓" : "Approve repaired set";
@@ -184,7 +184,7 @@
   approve?.addEventListener("click", () => {
     if (completed.size !== stageButtons.length) return;
     approved = true;
-    appendLog("Human authority", "Approved repaired set", "The repaired evidence set may return to the decision queue; no external action was released.", "approved");
+    appendLog("Operator authority", "Approved repaired set", "The repaired evidence set may return to the decision queue; no external action was released.", "approved");
     saveState();
     updateProgress();
   });

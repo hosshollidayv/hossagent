@@ -76,7 +76,7 @@ function enhanceRequestAccess(html) {
     )
     .replace(
       "HossAgent access is reviewed before it is granted. This form records your request locally for operator review; it does not send an email.",
-      "Tell us where the decision chain is breaking. A human operator will review the fit, the evidence available, and the safest next step.",
+      "Tell us where the decision chain is breaking. An experienced operator will review the fit, the evidence available, and the safest next step.",
     )
     .replace(
       "All fields are required.",
@@ -88,7 +88,7 @@ function enhanceRequestAccess(html) {
     )
     .replace(
       '</div></section>\n<section class="form-card"',
-      '</div><div class="access-expectations"><div><span>01 · Review</span><strong>A human reads every request</strong></div><div><span>02 · Fit</span><strong>We map the right decision engine</strong></div><div><span>03 · Next step</span><strong>You get a bounded pilot path</strong></div></div></section>\n<section class="form-card"',
+      '</div><div class="access-expectations"><div><span>01 · Review</span><strong>Every request gets an operator review</strong></div><div><span>02 · Fit</span><strong>We map the right decision engine</strong></div><div><span>03 · Next step</span><strong>You get a bounded pilot path</strong></div></div></section>\n<section class="form-card"',
     );
 }
 

@@ -44,7 +44,7 @@
       label: "05 · Decide",
       caption: "HossAgent recommends an action with limitations. The named mission owner records the actual disposition.",
       state: "Reviewing",
-      kicker: "Human decision",
+      kicker: "Operator decision",
       title: "Retain authority and capture the rationale.",
       target: "#demo-modify",
       toast: "Decision signed by Mission Product Owner",

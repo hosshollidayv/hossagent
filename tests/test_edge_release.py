@@ -109,6 +109,25 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertIn("window.setTimeout(runAllRepairs, 900)", script)
         self.assertIn("pipeline-health.js", worker)
 
+    def test_customer_copy_uses_operator_language(self):
+        customer_facing_files = (
+            "mission_intelligence.py",
+            "pipeline_health.py",
+            "product_demos.py",
+            "edge/worker.js",
+            "static/mission-demo.js",
+            "static/pipeline-health.js",
+            "templates/demos.html",
+            "templates/marketing_landing.html",
+            "templates/mission_demo.html",
+            "templates/mission_intelligence.html",
+            "templates/operator.html",
+            "templates/pipeline_health.html",
+        )
+        for relative_path in customer_facing_files:
+            copy = (ROOT / relative_path).read_text().lower()
+            self.assertNotIn("human", copy, relative_path)
+
 
 if __name__ == "__main__":
     unittest.main()

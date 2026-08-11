@@ -377,7 +377,7 @@ def _evaluation_workspace(evaluation: MissionEvaluation) -> str:
           </article>
           <article class="pilot-stage analysis-stage"><div class="pilot-stage-head"><span>02</span><div><p>Transparent analysis</p><h2>Compare the release by cohort.</h2></div></div>%s</article>
         </div>
-        <article class="pilot-stage decision-stage"><div class="pilot-stage-head"><span>03</span><div><p>Human-owned decision</p><h2>Record the release disposition.</h2></div><div class="decision-current"><span>Current record</span><strong>%s</strong></div></div>
+        <article class="pilot-stage decision-stage"><div class="pilot-stage-head"><span>03</span><div><p>Operator-owned decision</p><h2>Record the release disposition.</h2></div><div class="decision-current"><span>Current record</span><strong>%s</strong></div></div>
           <form action="/mission-intelligence/pilot/%s/decision" method="post">
             <div class="decision-actions">%s</div>
             <div class="decision-fields"><label>Decision rationale<textarea name="decision_rationale" required placeholder="State why this evidence supports the selected action.">%s</textarea></label><label>Approved by<input name="approved_by" required value="%s"></label></div>
@@ -569,7 +569,7 @@ def _brief_html(evaluation: MissionEvaluation, customer: Customer) -> str:
             _format_number(row["treatment"]["guardrail_rate"], "%"),
         ) for row in analysis["cohorts"]
     )
-    decision = (evaluation.decision_action or "Pending human decision").replace("_", " ").upper()
+    decision = (evaluation.decision_action or "Pending operator decision").replace("_", " ").upper()
     decided_at = evaluation.decided_at.isoformat() + "Z" if evaluation.decided_at else "Not yet signed"
     return """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>%s · Evidence brief</title><style>
       body{margin:0;background:#eeece4;color:#171a18;font:15px/1.55 Inter,Arial,sans-serif}.page{max-width:920px;margin:40px auto;background:#fffefa;border:1px solid #c9c8c0}.head{padding:32px;background:#111513;color:#fff}.brand{color:#c8f16b;font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:12px}.head h1{font-size:42px;line-height:1;margin:26px 0 10px}.head p{color:#a9b1ab}.meta,.metrics{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #c9c8c0}.meta div,.metrics div{padding:18px;border-right:1px solid #c9c8c0}.meta span,.metrics span{display:block;color:#626963;font-size:11px;text-transform:uppercase}.meta strong,.metrics strong{display:block;margin-top:6px}.section{padding:28px 32px;border-bottom:1px solid #c9c8c0}.decision{border-left:5px solid #c8f16b;background:#edf4ef}.decision strong{font-size:28px}.decision p{max-width:760px}.section h2{margin-top:0}table{width:100%%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd}.boundary{background:#f6efe3;border-left:4px solid #d19b48}.foot{padding:22px 32px;color:#626963;font-size:12px}.actions{max-width:920px;margin:20px auto;display:flex;gap:10px}.actions button,.actions a{padding:11px 16px;background:#111513;color:#fff;text-decoration:none;border:0;border-radius:5px;cursor:pointer}@media print{.actions{display:none}.page{margin:0;border:0}}
@@ -586,7 +586,7 @@ def _brief_html(evaluation: MissionEvaluation, customer: Customer) -> str:
         html.escape(evaluation.name), evaluation.public_id, html.escape(evaluation.name), html.escape(evaluation.hypothesis),
         html.escape(customer.company), html.escape(evaluation.release_version), html.escape(evaluation.analysis_version),
         html.escape((evaluation.dataset_sha256 or "unavailable")[:16]), decision,
-        html.escape(evaluation.decision_rationale or "Human decision has not been recorded."),
+        html.escape(evaluation.decision_rationale or "Operator decision has not been recorded."),
         html.escape(evaluation.approved_by or evaluation.decision_owner), decided_at,
         analysis["row_count"], analysis["operator_count"], html.escape(recommendation["action"].replace("_", " ").title()),
         evaluation.guardrail_threshold, cohort_rows, html.escape(recommendation["title"]), html.escape(recommendation["basis"]),
@@ -643,7 +643,7 @@ def evidence_brief_pdf(public_id: str, request: Request, session: Session = Depe
     pdf.cell(0, 9, latin((evaluation.decision_action or "Pending").replace("_", " ").upper()))
     pdf.ln(11)
     pdf.set_font("Helvetica", "", 10)
-    pdf.multi_cell(178, 6, latin(evaluation.decision_rationale or "Human decision has not been recorded."))
+    pdf.multi_cell(178, 6, latin(evaluation.decision_rationale or "Operator decision has not been recorded."))
     pdf.ln(5)
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(0, 7, "EVIDENCE SUMMARY")

@@ -35,7 +35,7 @@
     </section>
 
     <section class="repair-console" id="repair-console" aria-labelledby="repair-title">
-      <div class="repair-console-copy"><p class="pipeline-kicker">Autonomous remediation</p><h2 id="repair-title">Detect. Repair. Re-check. Escalate only what remains.</h2><p>Bounded repairs run automatically on this illustrative pipeline. The system may refresh evidence, re-resolve identities, narrow claims, or suppress unsafe records. It cannot release the final artifact without a human decision.</p></div>
+      <div class="repair-console-copy"><p class="pipeline-kicker">Autonomous remediation</p><h2 id="repair-title">Detect. Repair. Re-check. Escalate only what remains.</h2><p>Bounded repairs run automatically on this illustrative pipeline. The system may refresh evidence, re-resolve identities, narrow claims, or suppress unsafe records. It cannot release the final artifact without operator approval.</p></div>
       <div class="repair-runner">
         <header><div><span class="repair-live"><i></i><b id="repair-status">Watching for broken stages</b></span><small id="repair-count">0 repairs completed</small></div><button id="repair-reset" type="button">Reset run</button></header>
         <ol id="repair-log" class="repair-log" aria-live="polite" aria-label="Repair activity"><li class="repair-placeholder"><span>Ready</span><p>Broken stages will be repaired in dependency order.</p></li></ol>
@@ -54,7 +54,7 @@
     </section>
 
     <section class="pipeline-section blockers-section" id="blockers" aria-labelledby="blockers-title">
-      <div class="pipeline-section-head"><div><p class="pipeline-kicker">Operator attention</p><h2 id="blockers-title">Resolve, narrow, or stop.</h2></div><p>These examples show how unresolved evidence reaches a human review queue. They are interface fixtures, not live customer or mission records.</p></div>
+      <div class="pipeline-section-head"><div><p class="pipeline-kicker">Operator attention</p><h2 id="blockers-title">Resolve, narrow, or stop.</h2></div><p>These examples show how unresolved evidence reaches the operator review queue. They are interface fixtures, not live customer or mission records.</p></div>
       <div class="pipeline-blockers" role="table" aria-label="Illustrative pipeline blockers">
         <div class="pipeline-blocker blocker-labels" role="row"><span role="columnheader">Work item</span><span role="columnheader">Stage</span><span role="columnheader">Why it is blocked</span><span role="columnheader">Operator move</span></div>
         %%BLOCKERS%%
