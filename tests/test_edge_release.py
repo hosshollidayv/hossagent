@@ -45,6 +45,9 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertIn("@media (max-width: 620px)", css)
         self.assertIn("font-size: 16px", css)
         self.assertIn(".form-card input:focus", css)
+        self.assertIn(
+            "Requests are reviewed by an operator before access is granted.", worker
+        )
 
     def test_operator_command_represents_the_full_portfolio(self):
         page = (ROOT / "templates" / "operator.html").read_text()
