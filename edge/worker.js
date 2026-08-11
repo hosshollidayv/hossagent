@@ -158,6 +158,19 @@ function enhanceLogin(html) {
     );
 }
 
+export function logoutResponse(request) {
+  const destination = new URL("/login?logout=true", request.url);
+  const headers = new Headers({
+    Location: destination.toString(),
+    "Cache-Control": "no-store",
+    "X-HossAgent-Edge": "session-logout",
+  });
+  const expiredCookie = "Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax";
+  headers.append("Set-Cookie", `hossagent_session=; ${expiredCookie}`);
+  headers.append("Set-Cookie", `hossagent_admin=; ${expiredCookie}`);
+  return new Response(null, { status: 303, headers });
+}
+
 async function loginPage(request, env) {
   let originRequest = request;
   if (env.EDGE_ORIGIN) {
@@ -309,6 +322,13 @@ async function pipelineHealthPage(request, env, assetPath) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (
+      (url.pathname === "/logout" || url.pathname === "/logout/"
+        || url.pathname === "/admin/logout" || url.pathname === "/admin/logout/")
+      && (request.method === "GET" || request.method === "HEAD" || request.method === "POST")
+    ) {
+      return logoutResponse(request);
+    }
     if (url.pathname === "/signup" || url.pathname === "/signup/") {
       return Response.redirect(new URL("/request-access", request.url), 303);
     }
