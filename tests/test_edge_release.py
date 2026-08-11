@@ -49,11 +49,18 @@ class EdgeReleaseTest(unittest.TestCase):
             "Requests are reviewed by an operator before access is granted.", worker
         )
 
-    def test_signup_uses_account_owner_language(self):
+    def test_signup_routes_to_request_access(self):
         worker = (ROOT / "edge" / "worker.js").read_text()
         self.assertIn('url.pathname === "/signup"', worker)
-        self.assertIn("roleAwareOriginPage", worker)
-        self.assertIn("Owner approval before operational access", worker)
+        self.assertIn('new URL("/request-access", request.url)', worker)
+        self.assertNotIn("roleAwareOriginPage", worker)
+
+    def test_login_is_positioned_as_owner_only(self):
+        worker = (ROOT / "edge" / "worker.js").read_text()
+        self.assertIn('url.pathname === "/login"', worker)
+        self.assertIn("loginPage", worker)
+        self.assertIn("Use your owner credentials.", worker)
+        self.assertIn("Request early access", worker)
 
     def test_operator_command_represents_the_full_portfolio(self):
         page = (ROOT / "templates" / "operator.html").read_text()
@@ -88,19 +95,32 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertIn("@media (max-width: 720px)", css)
         self.assertIn("grid-template-columns: 1fr", css)
 
-    def test_product_registry_is_server_gated_to_owner_session(self):
+    def test_operational_surfaces_are_server_gated_to_owner_session(self):
         worker = (ROOT / "edge" / "worker.js").read_text()
         page = (ROOT / "templates" / "operator.html").read_text()
-        css = (ROOT / "static" / "operator.css").read_text()
-        self.assertIn("<!-- OWNER_ONLY_START -->", page)
-        self.assertIn("<!-- OWNER_ONLY_END -->", page)
         self.assertIn("ownerClaimFromValidatedSession", worker)
+        self.assertIn("isOwnerOnlyPath", worker)
+        self.assertIn("ownerAccessGate", worker)
         self.assertIn('claims.role === "owner"', worker)
         self.assertIn("claims.auth === true", worker)
-        self.assertIn("OWNER_ONLY_START", worker)
-        self.assertIn("operatorHtmlForViewer", worker)
-        self.assertIn("operator-hero-member", worker)
-        self.assertIn(".operator-hero-member", css)
+        self.assertIn('"/mission-intelligence/pilot"', worker)
+        self.assertIn('"/portal"', worker)
+        self.assertIn('new URL("/demos", request.url)', worker)
+        self.assertNotIn("operatorHtmlForViewer", worker)
+        self.assertIn("Demo only", page)
+        self.assertIn("Working alpha", page)
+
+    def test_public_copy_matches_release_readiness(self):
+        landing = (ROOT / "templates" / "marketing_landing.html").read_text()
+        mission = (ROOT / "templates" / "mission_intelligence.html").read_text()
+        demos = (ROOT / "templates" / "demos.html").read_text()
+        self.assertEqual(landing.count("Product access coming soon"), 4)
+        self.assertIn("Self-guided demos available now.", landing)
+        self.assertNotIn('href="/signup"', landing)
+        self.assertNotIn('href="/login"', landing)
+        self.assertIn("Operational workspace coming soon.", mission)
+        self.assertNotIn('href="/mission-intelligence/pilot"', mission)
+        self.assertIn("Product workspaces are coming soon", demos)
 
     def test_missing_product_pipeline_health_surfaces_are_protected_and_rendered(self):
         worker = (ROOT / "edge" / "worker.js").read_text()

@@ -35,6 +35,31 @@ const PIPELINE_ROUTES = new Map([
   ["/property-intelligence/pipeline/", "/property-intelligence/pipeline/index.html"],
 ]);
 
+const OWNER_ONLY_PREFIXES = [
+  "/mission-intelligence/pilot",
+  "/public-sector/pipeline",
+  "/private-sector/pipeline",
+  "/property-intelligence/pipeline",
+  "/portal",
+  "/customers",
+  "/leads",
+  "/invoices",
+  "/billing",
+  "/subscribe",
+  "/upgrade",
+  "/api/user/",
+  "/api/outreach/",
+  "/api/message/",
+  "/api/pending-outreach",
+  "/api/conversations/",
+  "/api/subscription/",
+  "/api/customer/",
+  "/api/create-checkout-session",
+  "/api/create-billing-portal-session",
+  "/api/manual-send",
+  "/api/portal/",
+];
+
 const SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",
@@ -93,35 +118,8 @@ function enhanceRequestAccess(html) {
     )
     .replace(
       '</div></section>\n<section class="form-card"',
-      '</div><div class="access-expectations"><div><span>01 · Review</span><strong>Every request gets an operator review</strong></div><div><span>02 · Fit</span><strong>We map the right decision engine</strong></div><div><span>03 · Next step</span><strong>You get a bounded pilot path</strong></div></div></section>\n<section class="form-card"',
+      '</div><div class="access-expectations"><div><span>01 · Review</span><strong>Every request gets an operator review</strong></div><div><span>02 · Fit</span><strong>We map the right decision engine</strong></div><div><span>03 · Next step</span><strong>We confirm fit and next steps</strong></div></div></section>\n<section class="form-card"',
     );
-}
-
-function normalizeRoleCopy(html) {
-  const legacyRole = ["Hu", "man"].join("");
-  return html.replace(
-    `${legacyRole} review before operational access`,
-    "Owner approval before operational access",
-  );
-}
-
-async function roleAwareOriginPage(request, env) {
-  let originRequest = request;
-  if (env.EDGE_ORIGIN) {
-    const originUrl = new URL(request.url);
-    originUrl.protocol = "https:";
-    originUrl.host = env.EDGE_ORIGIN;
-    originRequest = new Request(originUrl, request);
-  }
-  const origin = await fetch(originRequest);
-  const contentType = origin.headers.get("content-type") || "";
-  if (!contentType.includes("text/html")) return origin;
-  const headers = new Headers(origin.headers);
-  headers.delete("content-length");
-  headers.set("X-HossAgent-Edge", "role-aware-copy");
-  headers.set("Cache-Control", "no-store");
-  const body = request.method === "HEAD" ? null : normalizeRoleCopy(await origin.text());
-  return new Response(body, { status: origin.status, headers });
 }
 
 async function requestAccessPage(request, env) {
@@ -144,11 +142,39 @@ async function requestAccessPage(request, env) {
   return new Response(body, { status: origin.status, headers });
 }
 
-export function operatorHtmlForViewer(operatorHtml, ownerAuthorized) {
-  if (ownerAuthorized) return operatorHtml;
-  return operatorHtml
-    .replace(/<!-- OWNER_ONLY_START -->[\s\S]*?<!-- OWNER_ONLY_END -->/, "")
-    .replace('class="operator-hero"', 'class="operator-hero operator-hero-member"');
+function enhanceLogin(html) {
+  return html
+    .replace(
+      "Sign in with your HossAgent account. The separate owner bootstrap path remains available for emergency operator access.",
+      "Sign in to owner-only operating and troubleshooting workspaces.",
+    )
+    .replace(
+      "Use your owner or approved member credentials.",
+      "Use your owner credentials.",
+    )
+    .replace(
+      'New to HossAgent? <a href="/signup">Create an account</a>.',
+      'Looking for product access? <a href="/request-access">Request early access</a>.',
+    );
+}
+
+async function loginPage(request, env) {
+  let originRequest = request;
+  if (env.EDGE_ORIGIN) {
+    const originUrl = new URL(request.url);
+    originUrl.protocol = "https:";
+    originUrl.host = env.EDGE_ORIGIN;
+    originRequest = new Request(originUrl, request);
+  }
+  const origin = await fetch(originRequest);
+  const contentType = origin.headers.get("content-type") || "";
+  if (!contentType.includes("text/html")) return origin;
+  const headers = new Headers(origin.headers);
+  headers.delete("content-length");
+  headers.set("X-HossAgent-Edge", "owner-login");
+  headers.set("Cache-Control", "no-store");
+  const body = request.method === "HEAD" ? null : enhanceLogin(await origin.text());
+  return new Response(body, { status: origin.status, headers });
 }
 
 export function ownerClaimFromValidatedSession(request) {
@@ -171,6 +197,44 @@ export function ownerClaimFromValidatedSession(request) {
   }
 }
 
+export function isOwnerOnlyPath(pathname) {
+  if (pathname === "/operator" || pathname === "/operator/") return true;
+  return OWNER_ONLY_PREFIXES.some((prefix) => (
+    pathname === prefix || pathname.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`)
+  ));
+}
+
+async function ownerAccessGate(request, env) {
+  let authUrl = new URL("/operator", request.url);
+  if (env.EDGE_ORIGIN) {
+    authUrl.protocol = "https:";
+    authUrl.host = env.EDGE_ORIGIN;
+  }
+  const authRequest = new Request(authUrl, {
+    method: "GET",
+    headers: request.headers,
+    redirect: "manual",
+  });
+  const origin = await fetch(authRequest);
+  const contentType = origin.headers.get("content-type") || "";
+  const browserRequest = request.method === "GET" || request.method === "HEAD";
+
+  if (origin.status !== 200 || !contentType.includes("text/html")) {
+    if (browserRequest) {
+      const next = encodeURIComponent(new URL(request.url).pathname);
+      return Response.redirect(new URL(`/login?next=${next}`, request.url), 303);
+    }
+    return new Response("Not found", { status: 404 });
+  }
+
+  if (!ownerClaimFromValidatedSession(request)) {
+    if (browserRequest) return Response.redirect(new URL("/demos", request.url), 303);
+    return new Response("Not found", { status: 404 });
+  }
+
+  return null;
+}
+
 async function operatorPage(request, env) {
   let originRequest = request;
   if (env.EDGE_ORIGIN) {
@@ -190,10 +254,6 @@ async function operatorPage(request, env) {
   }));
   if (!operatorAsset.ok) return origin;
 
-  // The origin's 200 response above is the signature-validation gate. Only after
-  // that succeeds do we trust the role claim inside the same signed session.
-  const ownerAuthorized = ownerClaimFromValidatedSession(request);
-
   const headers = new Headers(origin.headers);
   headers.delete("content-length");
   headers.set("Content-Type", "text/html; charset=utf-8");
@@ -202,7 +262,7 @@ async function operatorPage(request, env) {
   headers.set("Cache-Control", "no-store");
   let body = null;
   if (request.method !== "HEAD") {
-    body = operatorHtmlForViewer(await operatorAsset.text(), ownerAuthorized);
+    body = await operatorAsset.text();
   }
   return new Response(body, { status: 200, headers });
 }
@@ -249,11 +309,18 @@ async function pipelineHealthPage(request, env, assetPath) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/signup" || url.pathname === "/signup/") {
+      return Response.redirect(new URL("/request-access", request.url), 303);
+    }
     if (url.pathname === "/request-access" && (request.method === "GET" || request.method === "HEAD")) {
       return requestAccessPage(request, env);
     }
-    if (url.pathname === "/signup" && (request.method === "GET" || request.method === "HEAD")) {
-      return roleAwareOriginPage(request, env);
+    if (url.pathname === "/login" && (request.method === "GET" || request.method === "HEAD")) {
+      return loginPage(request, env);
+    }
+    if (isOwnerOnlyPath(url.pathname)) {
+      const denied = await ownerAccessGate(request, env);
+      if (denied) return denied;
     }
     if (url.pathname === "/operator" && (request.method === "GET" || request.method === "HEAD")) {
       return operatorPage(request, env);
