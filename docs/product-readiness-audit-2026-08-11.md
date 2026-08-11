@@ -13,12 +13,12 @@ Only public marketing, synthetic product previews, self-guided demos, legal page
 | Marketing landing page | Product positioning and four product paths | Customer-ready | Public |
 | Demo hub | Routes to four no-login walkthroughs | Customer-ready | Public |
 | Public Sector demo | Synthetic pursuit workflow and artifact preview | Customer-ready as a demo | Public |
-| Mission Intelligence overview | Synthetic interactive product preview | Customer-ready as a preview | Public |
-| Mission Intelligence demo | Synthetic release-evidence walkthrough | Customer-ready as a demo | Public |
+| Mission Release Gate overview | Synthetic interactive product preview | Customer-ready as a preview | Public |
+| Mission Release Gate demo | Synthetic release-decision walkthrough | Customer-ready as a demo | Public |
 | Private Sector demo | Synthetic account-intelligence walkthrough | Customer-ready as a demo | Public |
 | Property Intelligence demo | Synthetic property-intelligence walkthrough | Customer-ready as a demo | Public |
 | Request access | Intake for fit review and next steps | Customer-ready | Public |
-| Mission Intelligence pilot | Real CSV/JSON validation, cohort analysis, persistence, decision recording, HTML/PDF export | Functional alpha, not customer-ready | Owner-only |
+| Mission Release Gate alpha | Real CSV/JSON validation, immutable evidence revisions, cohort analysis, append-only signed decisions, HTML/PDF export | Hardened functional alpha; external pilot review still required | Owner-only |
 | Public Sector pipeline | Browser-session pipeline repair simulation; no proven live connectors | Not customer-ready | Owner-only |
 | Private Sector pipeline | Browser-session pipeline repair simulation; no proven live connectors | Not customer-ready | Owner-only |
 | Property Intelligence pipeline | Browser-session pipeline repair simulation; no proven live connectors | Not customer-ready | Owner-only |
@@ -30,7 +30,7 @@ Only public marketing, synthetic product previews, self-guided demos, legal page
 
 - The four demo surfaces are explicitly synthetic, perform no external writes, require no account, and bound their claims in the UI.
 - Pipeline repair controls persist only in browser `sessionStorage`; they do not repair live product connectors or data.
-- Mission Intelligence has working domain logic and durable records, but the current release does not demonstrate the operational security, deployment, upload governance, and full HTTP integration needed for customer use.
+- Mission Release Gate now preserves every evidence attempt, keeps accepted datasets immutable, binds events to an import revision, appends rather than overwrites decisions, fingerprints signed records, and blocks unsigned exports. It remains owner-only until the protected HTTP path, backup/restore behavior, and an external pilot are proven end to end.
 - The legacy portal can trigger outreach, automation, billing, and connector-dependent workflows. Repository code supports dry-run and disabled modes, and production configuration is not proven by the customer release tests.
 - Public copy previously linked directly into unfinished workspaces and account creation. Those links are removed in this release.
 

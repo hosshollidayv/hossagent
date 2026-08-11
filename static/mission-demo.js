@@ -44,20 +44,20 @@
       label: "05 · Decide",
       caption: "HossAgent recommends an action with limitations. The named mission owner records the actual disposition.",
       state: "Reviewing",
-      kicker: "Operator decision",
-      title: "Retain authority and capture the rationale.",
+      kicker: "Release disposition",
+      title: "Retain named authority and capture the rationale.",
       target: "#demo-modify",
       toast: "Decision signed by Mission Product Owner",
       duration: 6800,
     },
     {
-      label: "06 · Brief",
-      caption: "The result leaves the dashboard as a reproducible evidence package for product, test, and authorization review.",
+      label: "06 · Record",
+      caption: "The result leaves the dashboard as a fingerprinted release record for product, test, and authorization review.",
       state: "Complete",
-      kicker: "Evidence package",
-      title: "Export the decision, lineage, findings, and claim boundary.",
+      kicker: "Signed release record",
+      title: "Export the decision, lineage, findings, boundary, and fingerprint.",
       target: "#demo-brief",
-      toast: "PDF and HTML evidence briefs ready",
+      toast: "Signed PDF and HTML release record ready",
       duration: 9000,
     },
   ];
@@ -247,7 +247,7 @@
   nextTargets.forEach((id, index) => document.getElementById(id).addEventListener("click", () => setStep(index + 1)));
   document.getElementById("demo-trainee").addEventListener("click", (event) => event.currentTarget.classList.toggle("demo-highlight"));
   document.getElementById("demo-modify").addEventListener("click", (event) => event.currentTarget.classList.toggle("selected"));
-  document.getElementById("demo-brief").addEventListener("click", () => showToast("Demo evidence brief generated · no file written"));
+  document.getElementById("demo-brief").addEventListener("click", () => showToast("Demo release record generated · no file written"));
 
   document.addEventListener("keydown", (event) => {
     if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) return;

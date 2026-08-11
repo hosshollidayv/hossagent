@@ -721,7 +721,7 @@ def serve_marketing_landing(request: Request):
 
 @app.get("/mission-intelligence", response_class=HTMLResponse)
 def serve_mission_intelligence(request: Request):
-    """Mission Intelligence: release-to-outcome evidence for mission software."""
+    """Mission Release Gate: evidence-backed release decisions for mission software."""
     track_page_view(
         path="/mission-intelligence",
         referrer=request.headers.get("referer"),
@@ -735,7 +735,7 @@ def serve_mission_intelligence(request: Request):
 
 @app.get("/mission-intelligence/demo", response_class=HTMLResponse)
 def serve_mission_intelligence_demo(request: Request):
-    """Public, self-guided tour of the Mission Intelligence pilot workflow."""
+    """Public, self-guided tour of the Mission Release Gate workflow."""
     track_page_view(
         path="/mission-intelligence/demo",
         referrer=request.headers.get("referer"),

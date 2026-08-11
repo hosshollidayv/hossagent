@@ -99,7 +99,7 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertNotIn(">Product surface<", page)
         for product in (
             "Public Sector",
-            "Mission Intelligence",
+            "Mission Release Gate",
             "Private Sector",
             "Property Intelligence",
         ):
@@ -131,19 +131,20 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertIn('new URL("/demos", request.url)', worker)
         self.assertNotIn("operatorHtmlForViewer", worker)
         self.assertIn("Demo only", page)
-        self.assertIn("Working alpha", page)
+        self.assertIn("Protected alpha", page)
 
     def test_public_copy_matches_release_readiness(self):
         landing = (ROOT / "templates" / "marketing_landing.html").read_text()
         mission = (ROOT / "templates" / "mission_intelligence.html").read_text()
         demos = (ROOT / "templates" / "demos.html").read_text()
-        self.assertEqual(landing.count("Product access coming soon"), 4)
+        self.assertEqual(landing.count("Product access coming soon"), 3)
+        self.assertIn("Limited pilot access", landing)
         self.assertIn("Self-guided demos available now.", landing)
         self.assertNotIn('href="/signup"', landing)
         self.assertNotIn('href="/login"', landing)
-        self.assertIn("Operational workspace coming soon.", mission)
+        self.assertIn("Pilot access is limited.", mission)
         self.assertNotIn('href="/mission-intelligence/pilot"', mission)
-        self.assertIn("Product workspaces are coming soon", demos)
+        self.assertIn("Customer workspaces are invitation-only", demos)
 
     def test_missing_product_pipeline_health_surfaces_are_protected_and_rendered(self):
         worker = (ROOT / "edge" / "worker.js").read_text()

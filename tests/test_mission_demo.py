@@ -17,8 +17,8 @@ class MissionDemoTest(unittest.TestCase):
             "Bring the evidence",
             "Validate the run",
             "Expose cohort risk",
-            "Record the decision",
-            "Export the brief",
+            "Sign the disposition",
+            "Export the record",
         ):
             self.assertIn(phrase, page)
         self.assertIn("No account, upload, or operational claim", page)
