@@ -70,6 +70,7 @@ from signals_agent import (
     get_lead_events_counts_by_status
 )
 from email_utils import send_email, get_email_status, get_email_log, get_sendgrid_stats
+from account_notifications import notify_owner_of_external_account
 from lead_service import generate_new_leads_from_source, get_lead_source_log
 from lead_sources import get_lead_source_status
 import signal_sources
@@ -923,6 +924,15 @@ def signup_post(
     )
     
     print(f"[SIGNUP] New customer created: {customer.company} ({customer.contact_email})")
+    notify_owner_of_external_account(
+        account_id=customer.id,
+        company=customer.company,
+        contact_name=customer.contact_name,
+        contact_email=customer.contact_email,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        created_at=customer.created_at,
+    )
     
     session_token = create_customer_session(customer.id)
     response = RedirectResponse(url="/portal", status_code=303)
