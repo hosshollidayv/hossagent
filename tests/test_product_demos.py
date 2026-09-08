@@ -12,8 +12,9 @@ class ProductDemosTest(unittest.TestCase):
     def test_every_non_mission_product_has_a_six_stage_demo(self):
         self.assertEqual(
             set(PRODUCT_DEMOS),
-            {"public-sector", "private-sector", "property-intelligence"},
+            {"hosstracker", "public-sector", "private-sector", "property-intelligence"},
         )
+        self.assertEqual(next(iter(PRODUCT_DEMOS)), "hosstracker")
         for slug, demo in PRODUCT_DEMOS.items():
             with self.subTest(slug=slug):
                 self.assertEqual(len(demo["steps"]), 6)
@@ -24,6 +25,10 @@ class ProductDemosTest(unittest.TestCase):
         public = json.dumps(PRODUCT_DEMOS["public-sector"])
         private = json.dumps(PRODUCT_DEMOS["private-sector"])
         property_demo = json.dumps(PRODUCT_DEMOS["property-intelligence"])
+        tracker = json.dumps(PRODUCT_DEMOS["hosstracker"])
+        self.assertIn("no autonomous mutation", tracker.lower())
+        self.assertIn("no blocker has been recorded", tracker.lower())
+        self.assertIn("separate", tracker.lower())
         self.assertIn("fake-pursuit", public.lower())
         self.assertIn("submission remains blocked", public.lower())
         self.assertIn("no buyer resolved", private.lower())
@@ -35,22 +40,34 @@ class ProductDemosTest(unittest.TestCase):
         main = (ROOT / "main.py").read_text()
         for route in (
             "/demos",
+            "/hosstracker",
+            "/hosstracker/demo",
             "/public-sector/demo",
             "/private-sector/demo",
             "/property-intelligence/demo",
         ):
             self.assertIn(f'@app.get("{route}"', main)
 
-    def test_landing_page_links_to_every_demo(self):
+    def test_landing_page_links_only_to_customer_facing_demos(self):
         landing = (ROOT / "templates" / "marketing_landing.html").read_text()
         for route in (
             "/demos",
+            "/hosstracker",
+            "/hosstracker/demo",
             "/public-sector/demo",
             "/mission-intelligence/demo",
             "/private-sector/demo",
-            "/property-intelligence/demo",
         ):
             self.assertIn(f'href="{route}"', landing)
+        self.assertNotIn("Property Intelligence", landing)
+        self.assertNotIn('href="/property-intelligence/demo"', landing)
+
+    def test_dormant_property_demo_code_is_retained_but_redirected(self):
+        main = (ROOT / "main.py").read_text()
+        config = json.dumps(PRODUCT_DEMOS["property-intelligence"])
+        self.assertIn("Property Intelligence", config)
+        self.assertIn("def retire_property_intelligence_demo", main)
+        self.assertIn('RedirectResponse(url="/hosstracker/demo", status_code=302)', main)
 
     def test_shared_engine_has_autoplay_and_manual_controls(self):
         template = (ROOT / "templates" / "product_demo.html").read_text()

@@ -11,11 +11,12 @@ class EdgeReleaseTest(unittest.TestCase):
         for route in (
             '"/"',
             '"/demos"',
+            '"/hosstracker"',
+            '"/hosstracker/demo"',
             '"/mission-intelligence"',
             '"/mission-intelligence/demo"',
             '"/public-sector/demo"',
             '"/private-sector/demo"',
-            '"/property-intelligence/demo"',
         ):
             self.assertIn(route, worker)
         self.assertIn("return fetch(request)", worker)
@@ -24,6 +25,22 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertIn('origin.status !== 200', worker)
         self.assertIn('"operator-command"', worker)
         self.assertIn("enhanceRequestAccess", worker)
+
+    def test_property_demo_is_retired_publicly_but_preserved_in_source(self):
+        worker = (ROOT / "edge" / "worker.js").read_text()
+        renderer = (ROOT / "edge" / "render_edge_assets.py").read_text()
+        public_landing = (ROOT / "templates" / "marketing_landing.html").read_text()
+        public_demos = (ROOT / "templates" / "demos.html").read_text()
+        edge_routes = worker.split("const RETIRED_PUBLIC_ROUTES", 1)[0]
+        self.assertNotIn('["/property-intelligence/demo",', edge_routes)
+        self.assertIn('"/property-intelligence/demo"', worker)
+        self.assertIn('new URL("/hosstracker/demo", request.url)', worker)
+        self.assertIn('PUBLIC_PRODUCT_DEMOS = ("hosstracker", "public-sector", "private-sector")', renderer)
+        self.assertNotIn("Property Intelligence", public_landing)
+        self.assertNotIn("Property Intelligence", public_demos)
+        self.assertIn('"property-intelligence"', (ROOT / "product_demos.py").read_text())
+        self.assertIn('"property-intelligence"', (ROOT / "pipeline_health.py").read_text())
+        self.assertIn("Property Intelligence", (ROOT / "templates" / "operator.html").read_text())
 
     def test_worker_targets_hossagent_without_origin_changes(self):
         config = (ROOT / "wrangler.jsonc").read_text()
@@ -137,9 +154,11 @@ class EdgeReleaseTest(unittest.TestCase):
         landing = (ROOT / "templates" / "marketing_landing.html").read_text()
         mission = (ROOT / "templates" / "mission_intelligence.html").read_text()
         demos = (ROOT / "templates" / "demos.html").read_text()
-        self.assertEqual(landing.count("Product access coming soon"), 3)
+        self.assertEqual(landing.count("Product access coming soon"), 2)
         self.assertIn("Limited pilot access", landing)
-        self.assertIn("Self-guided demos available now.", landing)
+        self.assertIn("Self-guided synthetic demo available now.", landing)
+        self.assertIn("HossTracker", landing)
+        self.assertLess(landing.index('id="hosstracker"'), landing.index('id="public-sector"'))
         self.assertNotIn('href="/signup"', landing)
         self.assertNotIn('href="/login"', landing)
         self.assertIn("Pilot access is limited.", mission)

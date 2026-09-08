@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="HossTracker is the operational truth layer for work that disappears into institutional queues—showing stage, ownership, next action, timing, blockers, and customer-safe status.">
+  <title>HossTracker — HossAgent</title>
+  {ga_script}
+  <link rel="stylesheet" href="/static/web.css">
+  <link rel="stylesheet" href="/static/hosstracker.css">
+</head>
+<body class="tracker-body">
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header tracker-header">
+    <a class="brand" href="/" aria-label="HossAgent home"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span><span class="brand-division">HossTracker</span></a>
+    <nav class="site-nav tracker-nav" aria-label="HossTracker navigation"><a href="#capability">Capability</a><a href="#preview">Medicine Cabinet</a><a href="#network">Hoss Network</a><a href="#governance">Governance</a></nav>
+    <div class="header-actions"><a class="text-link" href="/">All products</a><a class="text-link" href="/hosstracker/demo">Watch demo</a><a class="button button-small" href="/request-access">Request pilot access</a></div>
+  </header>
+
+  <main id="main">
+    <section class="tracker-hero" aria-labelledby="tracker-hero-title">
+      <div class="tracker-hero-copy">
+        <p class="eyebrow">Institutional Operations / Workflow Intelligence</p>
+        <h1 id="tracker-hero-title">Know where the work is—and what moves it next.</h1>
+        <p class="hero-lede">HossTracker is designed to turn opaque institutional queues into explicit ownership, next actions, credible timing, customer-safe status, and an attributable history.</p>
+        <div class="hero-actions"><a class="button" href="/hosstracker/demo">Watch HossTracker work <span aria-hidden="true">→</span></a><a class="button button-ghost" href="/request-access">Request pilot access</a></div>
+        <p class="availability-line"><strong>Guided product demonstration available now.</strong> Pilot access is limited. The preview uses synthetic data and does not represent a live customer deployment.</p>
+        <div class="tracker-constraints" aria-label="Product design constraints"><span><b>Institution-owned</b> truth</span><span><b>Operator-controlled</b> changes</span><span><b>Role-safe</b> visibility</span></div>
+      </div>
+
+      <aside class="tracker-truth-panel" aria-label="The six questions HossTracker is designed to answer">
+        <div class="tracker-panel-header"><span>Operational truth</span><span class="live-dot">Six questions</span></div>
+        <ol>
+          <li><span>01</span><div><strong>Where is it?</strong><p>Current workflow stage and time in that stage.</p></div></li>
+          <li><span>02</span><div><strong>Who owns it?</strong><p>An accountable person or team—not an ambiguous queue.</p></div></li>
+          <li><span>03</span><div><strong>What happens next?</strong><p>The next action required to move the work forward.</p></div></li>
+          <li><span>04</span><div><strong>When should that happen?</strong><p>A contractual target, operational target, or clearly bounded estimate.</p></div></li>
+          <li><span>05</span><div><strong>What is blocking it?</strong><p>A recorded dependency, with absence described as absence of evidence.</p></div></li>
+          <li class="tracker-truth-accent"><span>06</span><div><strong>When should completion be expected?</strong><p>A responsible range when history supports one—never invented precision.</p></div></li>
+        </ol>
+      </aside>
+    </section>
+
+    <section class="section tracker-capability" id="capability" aria-labelledby="tracker-capability-title">
+      <div class="section-intro"><p class="eyebrow">Operational truth above systems of record</p><h2 id="tracker-capability-title">Make invisible queues legible.</h2><p>HossTracker is designed to sit above or alongside existing systems, preserving their authority while making ownership, timing, exceptions, and next actions useful to the people waiting on the work.</p></div>
+      <div class="tracker-capability-grid">
+        <article><span>01</span><h3>Medicine Cabinet</h3><p>Separate healthy, at-risk, overdue, blocked, and unowned work so a manager can understand operational health at a glance.</p></article>
+        <article><span>02</span><h3>Business-time SLA</h3><p>Measure stage age against calendar or business-time targets, with configured holidays and pauses—without silently stopping a clock.</p></article>
+        <article><span>03</span><h3>Responsible ETA</h3><p>Use historical stage duration to show a range and confidence when the evidence supports it; say so plainly when it does not.</p></article>
+        <article><span>04</span><h3>Role-safe status</h3><p>Project the same work into separate internal, shared, and customer views so transparency does not become oversharing.</p></article>
+      </div>
+    </section>
+
+    <section class="tracker-preview-section" id="preview" aria-labelledby="tracker-preview-title">
+      <div class="tracker-preview-intro">
+        <div><p class="eyebrow">Medicine Cabinet preview</p><h2 id="tracker-preview-title">See the problem before it becomes the explanation.</h2><p>A synthetic public-records workflow shows how HossTracker could surface aged work, make the missing owner explicit, and trace the events behind the current state.</p></div>
+        <div class="tracker-synthetic-stamp">Synthetic demo data · Snapshot Sep 03, 2026</div>
+      </div>
+
+      <div class="tracker-health-summary" aria-label="Synthetic Medicine Cabinet counts">
+        <article class="tracker-health-card tracker-active"><span>Active</span><strong>31</strong><small>Open tracked items</small></article>
+        <article class="tracker-health-card tracker-healthy"><span><i aria-hidden="true"></i>Healthy</span><strong>8</strong><small>Within stage target</small></article>
+        <article class="tracker-health-card tracker-risk"><span><i aria-hidden="true"></i>At risk</span><strong>2</strong><small>At or above 75% of target</small></article>
+        <article class="tracker-health-card tracker-overdue"><span><i aria-hidden="true"></i>Overdue</span><strong>16</strong><small>Stage target exceeded</small></article>
+        <article class="tracker-health-card tracker-blocked"><span><i aria-hidden="true"></i>Blocked</span><strong>5</strong><small>Known dependency recorded</small></article>
+        <article class="tracker-health-card tracker-unowned"><span><i aria-hidden="true"></i>Unowned</span><strong>4</strong><small>No accountable owner</small></article>
+      </div>
+      <p class="tracker-overlap-note">Blocked and unowned are exception flags and may overlap the timing-health buckets.</p>
+
+      <div class="tracker-preview-grid">
+        <article class="tracker-work-item">
+          <div class="tracker-card-head">
+            <div><p class="eyebrow">Priority work / Public Records Request</p><h3>PRR-2026-001887</h3><p>Incident report and dispatch audio</p></div>
+            <span class="tracker-status-pill tracker-status-overdue"><i aria-hidden="true"></i>Overdue · 11 days beyond target</span>
+          </div>
+
+          <dl class="tracker-item-facts">
+            <div><dt>Current stage</dt><dd>Initial Review</dd></div>
+            <div><dt>Time in stage</dt><dd>13 days</dd></div>
+            <div><dt>Target</dt><dd>2 business days</dd></div>
+            <div><dt>Accountable owner</dt><dd class="tracker-alert-text">Unassigned</dd></div>
+            <div><dt>Blocker</dt><dd>No blocker recorded</dd></div>
+            <div><dt>Priority</dt><dd>Standard</dd></div>
+          </dl>
+
+          <div class="tracker-stage-region" aria-labelledby="tracker-stage-title">
+            <div class="tracker-subhead"><div><span>Stage-based progress</span><h4 id="tracker-stage-title">Workflow position—not a fabricated percentage</h4></div><small>3 complete · 1 current · 4 upcoming</small></div>
+            <ol class="tracker-stage-path">
+              <li class="is-complete"><span>01</span><strong>Submitted</strong><small>Complete</small></li>
+              <li class="is-complete"><span>02</span><strong>Validated</strong><small>Complete</small></li>
+              <li class="is-complete"><span>03</span><strong>Assigned</strong><small>Complete</small></li>
+              <li class="is-current"><span>04</span><strong>Initial Review</strong><small>Current · overdue</small></li>
+              <li><span>05</span><strong>Records Located</strong><small>Upcoming</small></li>
+              <li><span>06</span><strong>Redaction Review</strong><small>Upcoming</small></li>
+              <li><span>07</span><strong>Ready for Release</strong><small>Upcoming</small></li>
+              <li><span>08</span><strong>Released</strong><small>Upcoming</small></li>
+            </ol>
+          </div>
+
+          <div class="tracker-action-grid">
+            <div><span>Next action</span><strong>Review the request scope and identify responsive records.</strong><p>An accountable intake owner must be assigned before this action is treated as owned.</p></div>
+            <div class="tracker-eta-card"><span>Expected completion</span><strong>Estimate unavailable until initial review occurs.</strong><p>Remaining-stage history cannot produce a reliable range before the request scope is understood.</p></div>
+          </div>
+        </article>
+
+        <aside class="tracker-bottleneck-card" aria-labelledby="tracker-bottleneck-title">
+          <div class="tracker-bottleneck-label"><span>Primary bottleneck</span><span>Deterministic metrics</span></div>
+          <h3 id="tracker-bottleneck-title">Initial Review</h3>
+          <dl>
+            <div><dt>Active inventory</dt><dd>13 <small>of 31 items</small></dd></div>
+            <div><dt>Median stage age</dt><dd>8.3d</dd></div>
+            <div><dt>Stage target</dt><dd>2 business days</dd></div>
+            <div><dt>Overdue in stage</dt><dd>69.2%</dd></div>
+          </dl>
+          <p>Initial Review contains 41.9% of active work and has the highest overdue concentration in this synthetic snapshot. It is the first queue a supervisor should inspect.</p>
+          <div class="tracker-recommendation"><span>Suggested first move</span><strong>Establish ownership, then inspect intake capacity.</strong><p>Any assignment, escalation, or workflow change remains subject to authorized operator action.</p></div>
+        </aside>
+
+        <article class="tracker-timeline-card" aria-labelledby="tracker-timeline-title">
+          <div class="tracker-subhead"><div><span>Immutable event timeline</span><h3 id="tracker-timeline-title">What the record says happened</h3></div><small>Events shown in chronological order</small></div>
+          <ol>
+            <li><time datetime="2026-08-21T09:14:00-04:00">Aug 21 · 09:14</time><div><strong>Request submitted</strong><p>Customer action</p></div></li>
+            <li><time datetime="2026-08-21T09:14:00-04:00">Aug 21 · 09:14</time><div><strong>Confirmation sent</strong><p>Automation</p></div></li>
+            <li><time datetime="2026-08-23T09:00:00-04:00">Aug 23 · 09:00</time><div><strong>SLA warning triggered</strong><p>System event</p></div></li>
+            <li><time datetime="2026-08-24T09:00:00-04:00">Aug 24 · 09:00</time><div><strong>Initial-review SLA exceeded</strong><p>Escalation event</p></div></li>
+            <li><time datetime="2026-08-28T09:00:00-04:00">Aug 28 · 09:00</time><div><strong>Supervisor escalation triggered</strong><p>Automation</p></div></li>
+            <li><time datetime="2026-09-03T15:42:00-04:00">Sep 03 · 15:42</time><div><strong>Backlog notice sent</strong><p>Customer-visible notification</p></div></li>
+          </ol>
+        </article>
+
+        <article class="tracker-visibility-card" aria-labelledby="tracker-visibility-title">
+          <div class="tracker-subhead"><div><span>One item · bounded views</span><h3 id="tracker-visibility-title">Three appropriate levels of truth</h3></div><small>Fields are projected by policy, not hidden by route styling</small></div>
+          <div class="tracker-visibility-grid">
+            <section><span>Internal</span><h4>Operational view</h4><p><strong>Unassigned.</strong> No blocker has been recorded. Supervisor escalation is active; an intake capacity review has been requested.</p><small>Authorized staff, internal notes, workload, and escalation detail.</small></section>
+            <section><span>Shared</span><h4>Counterparty view</h4><p><strong>Initial review delayed.</strong> The originating institution will publish the next accepted handoff update when ownership is established.</p><small>Only the shared surface agreed for this handoff.</small></section>
+            <section><span>Customer</span><h4>Status portal view</h4><p><strong>Your request is in Initial Review.</strong> No action is required from you. A reliable completion estimate is not yet available.</p><small>No internal notes, staff details, or sensitive blockers.</small></section>
+          </div>
+        </article>
+      </div>
+
+      <p class="tracker-prototype-note"><strong>Prototype boundary:</strong> All organizations, records, counts, dates, events, and metrics in this preview are fictional and synthetic. The page demonstrates a proposed operational workflow; it does not claim live integrations, customer results, or production deployment.</p>
+    </section>
+
+    <section class="section tracker-network-section" id="network" aria-labelledby="tracker-network-title">
+      <div class="tracker-network-intro"><p class="eyebrow">The Hoss Network</p><h2 id="tracker-network-title">Email moves messages. HossTracker moves work.</h2><p>Interoperability—not a giant shared database—is the proposed network effect. Each institution keeps its own item and its own internal truth. A narrowly scoped HossHandoff carries the context and agreed state between them.</p></div>
+
+      <div class="tracker-handoff-diagram" role="img" aria-label="Organization A and Organization B each own separate internal items connected by one scoped HossHandoff">
+        <article class="tracker-org-card"><span>Organization A</span><h3>Broward Demo Agency</h3><p>Internal Item A</p><strong>PRR-2026-001887</strong><small>Private stages, notes, owners, and source records stay under Organization A's control.</small></article>
+        <article class="tracker-handoff-card"><span>HossHandoff</span><h3>Responsive records request</h3><dl><div><dt>Correlation</dt><dd>HOSS-7F31-A892-D118</dd></div><div><dt>Requested action</dt><dd>Locate and return responsive records</dd></div><div><dt>Shared status</dt><dd>Accepted · in progress</dd></div><div><dt>Visibility</dt><dd>Handoff participants only</dd></div></dl><p>Requested → Received → Accepted → Assigned → In Progress → Completed</p></article>
+        <article class="tracker-org-card"><span>Organization B</span><h3>District Investigations Unit</h3><p>Internal Item B</p><strong>INV-2026-0441</strong><small>Organization B controls its own workflow while publishing only agreed events back to the handoff.</small></article>
+      </div>
+
+      <div class="tracker-network-paths">
+        <article><span>Native path</span><h3>One click when both sides use HossTracker.</h3><p>The recipient receives a new internal item linked to the same global correlation ID. Each side can publish shared status without exposing its database or private workflow.</p></article>
+        <article><span>Graceful-degradation path</span><h3>A counterparty should not need a deployment.</h3><p>A secure link can open a lightweight external portal where the recipient acknowledges, responds, uploads a document, provides an ETA, asks a question, or completes the request. If that organization adopts later, the correlation history remains intact.</p></article>
+      </div>
+    </section>
+
+    <section class="section tracker-governance-section" id="governance" aria-labelledby="tracker-governance-title">
+      <div class="section-intro"><p class="eyebrow">Network governance by design</p><h2 id="tracker-governance-title">Shared work. Separate authority.</h2><p>A handoff grants access to one bounded shared surface. It does not grant one institution access to another institution's item, users, database, or internal decision process.</p></div>
+      <div class="tracker-governance-grid">
+        <article><span>01</span><h3>Institution-owned truth</h3><p>Source and destination organizations retain separate TrackedItems and control their own internal state.</p></article>
+        <article><span>02</span><h3>Scoped visibility</h3><p>Internal, shared, and customer fields are explicit projections with server-side authorization boundaries.</p></article>
+        <article><span>03</span><h3>Attributable events</h3><p>Every meaningful status, handoff, escalation, and operator action is designed to carry sender, recipient, timestamp, and authorization context.</p></article>
+        <article><span>04</span><h3>Operator authority</h3><p>HossAgent may read, explain, and draft. Consequential assignments, transitions, and disclosures remain governed actions.</p></article>
+      </div>
+    </section>
+
+    <section class="cta-section tracker-cta" aria-labelledby="tracker-cta-title"><div><p class="eyebrow">From opacity to accountability</p><h2 id="tracker-cta-title">See HossTracker answer where the work is—and what happens next.</h2></div><div class="cta-actions"><a class="button button-ghost-dark" href="/request-access">Request pilot access</a><a class="button button-light" href="/hosstracker/demo">Watch the demo <span aria-hidden="true">→</span></a></div></section>
+  </main>
+
+  <footer class="site-footer"><a class="brand brand-footer" href="/"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span></a><nav aria-label="Footer navigation"><a href="/">All products</a><a href="/hosstracker/demo">HossTracker demo</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/request-access">Contact</a></nav><p>Systems of record say work exists. HossTracker is designed to show whether it is moving.</p></footer>
+</body>
+</html>

@@ -719,6 +719,20 @@ def serve_marketing_landing(request: Request):
     return template.replace("{ga_script}", get_ga_script())
 
 
+@app.get("/hosstracker", response_class=HTMLResponse)
+def serve_hosstracker(request: Request):
+    """HossTracker: operational truth for work moving through institutional queues."""
+    track_page_view(
+        path="/hosstracker",
+        referrer=request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None
+    )
+    with open("templates/hosstracker.html", "r") as f:
+        template = f.read()
+    return template.replace("{ga_script}", get_ga_script())
+
+
 @app.get("/mission-intelligence", response_class=HTMLResponse)
 def serve_mission_intelligence(request: Request):
     """Mission Release Gate: evidence-backed release decisions for mission software."""
@@ -763,7 +777,7 @@ def serve_product_demos(request: Request):
 
 @app.get("/public-sector/demo", response_class=HTMLResponse)
 @app.get("/private-sector/demo", response_class=HTMLResponse)
-@app.get("/property-intelligence/demo", response_class=HTMLResponse)
+@app.get("/hosstracker/demo", response_class=HTMLResponse)
 def serve_product_demo(request: Request):
     """Render a configured, public, self-guided product decision walkthrough."""
     slug = request.url.path.strip("/").split("/")[0]
@@ -797,6 +811,18 @@ def serve_product_demo(request: Request):
             value = html_stdlib.escape(str(value), quote=True)
         template = template.replace(token, value)
     return template
+
+
+@app.get("/property-intelligence/demo", response_class=RedirectResponse)
+def retire_property_intelligence_demo(request: Request):
+    """Keep the dormant vertical in source while removing its public demo surface."""
+    track_page_view(
+        path=request.url.path,
+        referrer=request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None
+    )
+    return RedirectResponse(url="/hosstracker/demo", status_code=302)
 
 
 @app.get("/about", response_class=HTMLResponse)

@@ -73,6 +73,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .split-section { background: var(--white); border-block: 1px solid var(--line); }
 .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
 .mode-grid.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mode-grid.four.top-billing-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.top-billing-grid > .tracker-card { grid-column: 1 / -1; min-height: 440px; }
+.top-billing-grid > .public-card,
+.top-billing-grid > .mission-card,
+.top-billing-grid > .private-card { grid-column: span 2; }
 .mode-card { min-height: 520px; display: flex; flex-direction: column; padding: clamp(1.7rem, 4vw, 3.25rem); border: 1px solid var(--line); border-radius: 9px; background: var(--paper); }
 .mode-label { display: flex; align-items: center; gap: .7rem; color: var(--ink-soft); font-size: .78rem; font-weight: 790; letter-spacing: .08em; text-transform: uppercase; }
 .availability-badge { align-self: flex-start; margin-top: 1rem; padding: .38rem .58rem; border: 1px solid #bfc8b8; border-radius: 999px; color: #526043; background: #f4f7ed; font: 760 .62rem ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .02em; }
@@ -98,6 +103,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .card-link-row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
 .card-link-row .card-link + .card-link { color: #627b2d; }
 .public-card .card-link { color: #526f1e; }
+.tracker-card { position: relative; border-color: #a9bb82; background: linear-gradient(135deg, #f0f4e5 0%, #e5edd4 100%); box-shadow: 0 18px 46px rgba(60, 77, 29, .09); }
+.tracker-card::before { content: "Lead product"; position: absolute; top: 1.2rem; right: 1.2rem; padding: .35rem .5rem; border: 1px solid #9cae74; border-radius: 999px; color: #435b17; background: rgba(255, 255, 255, .45); font: 760 .56rem ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; }
+.tracker-card .mode-icon { background: #263815; color: var(--accent); }
+.tracker-card .check-list li::before,
+.tracker-card .card-link { color: #4c691c; }
 .private-card .card-link { color: #315d99; }
 .property-card .card-link { color: #2f7359; }
 
@@ -431,6 +441,11 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .section-intro { display: block; }
   .section-intro h2 { margin-top: 1rem; }
   .mode-grid, .principles-section { grid-template-columns: 1fr; }
+  .mode-grid.four.top-billing-grid { grid-template-columns: 1fr; }
+  .top-billing-grid > .tracker-card,
+  .top-billing-grid > .public-card,
+  .top-billing-grid > .mission-card,
+  .top-billing-grid > .private-card { grid-column: auto; }
   .process-list { grid-template-columns: 1fr; }
   .process-list li { min-height: 190px; border-right: 0; border-bottom: 1px solid var(--line-dark) !important; }
   .process-list li:last-child { border-bottom: 0 !important; }
@@ -455,6 +470,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .hero, .mission-hero { padding-block: 4rem; }
   .hero h1, .mission-hero h1 { font-size: 3.1rem; }
   .mode-card { min-height: 490px; }
+  .tracker-card::before { position: static; align-self: flex-start; order: -1; margin-bottom: 1rem; }
   .cta-section { width: calc(100% - 32px); }
   .capability-grid, .governance-grid { grid-template-columns: 1fr; }
   .capability-grid article, .governance-grid div { border-right: 0; border-bottom: 1px solid var(--line); }

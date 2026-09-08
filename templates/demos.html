@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Watch every HossAgent decision engine turn evidence into bounded, operator-controlled action.">
+  <meta name="description" content="Watch HossTracker and the HossAgent decision engines turn workflow and evidence into bounded, operator-controlled action.">
   <title>Product Demos — HossAgent</title>
   {ga_script}
   <link rel="stylesheet" href="/static/web.css">
@@ -13,17 +13,26 @@
   <a class="skip-link" href="#main">Skip to demos</a>
   <header class="site-header">
     <a class="brand" href="/" aria-label="HossAgent home"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span><span class="brand-division">Product demos</span></a>
-    <nav class="site-nav" aria-label="Main navigation"><a href="/">Home</a><a href="/#product">Products</a><a href="/#how-it-works">How it works</a></nav>
+    <nav class="site-nav" aria-label="Main navigation"><a href="/hosstracker">HossTracker</a><a href="/">Home</a><a href="/#product">Products</a><a href="/#how-it-works">How it works</a></nav>
     <div class="header-actions"><a class="button button-small" href="/request-access">Request access</a></div>
   </header>
 
   <main id="main">
     <section class="demo-hub-hero">
-      <div><p class="eyebrow">See the operating system work</p><h1>Four products. Four decisions. One evidence discipline.</h1></div>
-      <div><p>Choose a no-login walkthrough. Customer workspaces are invitation-only; the demos are available now.</p><span><i></i> All walkthroughs use fictional, synthetic data</span></div>
+      <div><p class="eyebrow">See the operating system work</p><h1>Four products. Four decisions. One operating discipline.</h1></div>
+      <div><p>Start with HossTracker, then explore three specialist decision engines. Customer workspaces are invitation-only; the no-login walkthroughs are available now.</p><span><i></i> All walkthroughs use fictional, synthetic data</span></div>
     </section>
 
     <section class="demo-hub-grid" aria-label="HossAgent product demos">
+      <article class="demo-hub-card tracker featured" data-featured-product="true">
+        <header><span>HT</span><p>HossTracker<small>Workflow intelligence</small></p><em>6 stages</em></header>
+        <h2>Opaque queue → accountable work record</h2>
+        <p>Watch a synthetic request become visible by stage, owner, SLA, blocker, next action, customer-safe status, and shared correlation record.</p>
+        <ol><li>Surface work at risk</li><li>Trace where it stalled</li><li>Prepare an accountable next action</li><li>Publish a role-safe status record</li></ol>
+        <div class="demo-hub-guardrail"><span>Guardrail</span><strong>No assignment, stage, or customer-visible state changes without authorized operator action.</strong></div>
+        <a href="/hosstracker/demo">Watch HossTracker demo <span aria-hidden="true">▶</span></a>
+      </article>
+
       <article class="demo-hub-card public">
         <header><span>P</span><p>Public Sector HossAgent<small>Pursuit intelligence</small></p><em>6 stages</em></header>
         <h2>Program signal → pursuit packet</h2>
@@ -51,19 +60,11 @@
         <a href="/private-sector/demo">Watch Private Sector demo <span aria-hidden="true">▶</span></a>
       </article>
 
-      <article class="demo-hub-card property">
-        <header><span>RE</span><p>Property Intelligence<small>Owner intelligence</small></p><em>6 stages</em></header>
-        <h2>Property event → owner-qualified motion</h2>
-        <p>Watch a permit become an exact parcel match, verified ownership chain, safe channel, approved motion, and property brief.</p>
-        <ol><li>Trace the primary event</li><li>Resolve parcel and owner</li><li>Verify the owner channel</li><li>Block ambiguous outreach</li></ol>
-        <div class="demo-hub-guardrail"><span>Guardrail</span><strong>No outreach until ownership and channel provenance are verified.</strong></div>
-        <a href="/property-intelligence/demo">Watch Property Intelligence demo <span aria-hidden="true">▶</span></a>
-      </article>
     </section>
 
     <section class="demo-hub-footer"><div><p class="eyebrow">Same control system</p><h2>Evidence comes in. Explainable action comes out. The operator still decides.</h2></div><a class="button button-light" href="/request-access">Request early access <span aria-hidden="true">→</span></a></section>
   </main>
 
-  <footer class="site-footer"><a class="brand brand-footer" href="/"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span></a><nav aria-label="Footer navigation"><a href="/">Home</a><a href="/mission-intelligence">Mission Release Gate</a><a href="/request-access">Contact</a></nav><p>Evidence in. Operator action out.</p></footer>
+  <footer class="site-footer"><a class="brand brand-footer" href="/"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span></a><nav aria-label="Footer navigation"><a href="/hosstracker">HossTracker</a><a href="/">Home</a><a href="/mission-intelligence">Mission Release Gate</a><a href="/request-access">Contact</a></nav><p>Evidence in. Operator action out.</p></footer>
 </body>
 </html>

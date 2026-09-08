@@ -13,6 +13,7 @@ from pipeline_health import PIPELINE_HEALTH
 
 
 DIST = ROOT / "edge" / "dist"
+PUBLIC_PRODUCT_DEMOS = ("hosstracker", "public-sector", "private-sector")
 
 
 def write_template(source: str, destination: str, replacements=None):
@@ -30,6 +31,7 @@ if DIST.exists():
 
 write_template("marketing_landing.html", "index.html")
 write_template("demos.html", "demos/index.html")
+write_template("hosstracker.html", "hosstracker/index.html")
 write_template("mission_intelligence.html", "mission-intelligence/index.html")
 write_template("mission_demo.html", "mission-intelligence/demo/index.html")
 write_template("operator.html", "operator/index.html")
@@ -111,7 +113,8 @@ for slug, pipeline in PIPELINE_HEALTH.items():
     }
     write_template("pipeline_health.html", f"{slug}/pipeline/index.html", replacements)
 
-for slug, demo in PRODUCT_DEMOS.items():
+for slug in PUBLIC_PRODUCT_DEMOS:
+    demo = PRODUCT_DEMOS[slug]
     values = {
         "%%META_DESCRIPTION%%": html.escape(demo["intro"], quote=True),
         "%%PRODUCT_NAME%%": html.escape(demo["productName"], quote=True),
@@ -131,6 +134,7 @@ static_output = DIST / "static"
 static_output.mkdir(parents=True, exist_ok=True)
 for filename in (
     "web.css",
+    "hosstracker.css",
     "mission-demo.css",
     "mission-demo.js",
     "portfolio-demo.css",

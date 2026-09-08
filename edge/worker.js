@@ -2,6 +2,10 @@ const EDGE_ROUTES = new Map([
   ["/", "/index.html"],
   ["/demos", "/demos/index.html"],
   ["/demos/", "/demos/index.html"],
+  ["/hosstracker", "/hosstracker/index.html"],
+  ["/hosstracker/", "/hosstracker/index.html"],
+  ["/hosstracker/demo", "/hosstracker/demo/index.html"],
+  ["/hosstracker/demo/", "/hosstracker/demo/index.html"],
   ["/mission-intelligence", "/mission-intelligence/index.html"],
   ["/mission-intelligence/", "/mission-intelligence/index.html"],
   ["/mission-intelligence/demo", "/mission-intelligence/demo/index.html"],
@@ -10,12 +14,17 @@ const EDGE_ROUTES = new Map([
   ["/public-sector/demo/", "/public-sector/demo/index.html"],
   ["/private-sector/demo", "/private-sector/demo/index.html"],
   ["/private-sector/demo/", "/private-sector/demo/index.html"],
-  ["/property-intelligence/demo", "/property-intelligence/demo/index.html"],
-  ["/property-intelligence/demo/", "/property-intelligence/demo/index.html"],
+]);
+
+const RETIRED_PUBLIC_ROUTES = new Set([
+  "/property-intelligence/demo",
+  "/property-intelligence/demo/",
+  "/property-intelligence/demo/index.html",
 ]);
 
 const EDGE_ASSETS = new Set([
   "/static/web.css",
+  "/static/hosstracker.css",
   "/static/mission-demo.css",
   "/static/mission-demo.js",
   "/static/portfolio-demo.css",
@@ -373,6 +382,11 @@ export default {
     const pipelineAsset = PIPELINE_ROUTES.get(url.pathname);
     if (pipelineAsset && (request.method === "GET" || request.method === "HEAD")) {
       return pipelineHealthPage(request, env, pipelineAsset);
+    }
+    if (RETIRED_PUBLIC_ROUTES.has(url.pathname) && (
+      request.method === "GET" || request.method === "HEAD"
+    )) {
+      return Response.redirect(new URL("/hosstracker/demo", request.url), 302);
     }
     const pageAsset = EDGE_ROUTES.get(url.pathname);
     if (pageAsset && (request.method === "GET" || request.method === "HEAD")) {
