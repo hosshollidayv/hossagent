@@ -161,6 +161,137 @@
   font-size: .84rem;
 }
 
+.tracker-body .tracker-story-section {
+  border-bottom: 1px solid var(--line);
+  background: #eeece4;
+}
+
+.tracker-body .tracker-story-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr);
+  gap: clamp(2rem, 7vw, 7rem);
+  align-items: end;
+  margin-bottom: 2.5rem;
+}
+
+.tracker-body .tracker-story-intro h2 {
+  max-width: 920px;
+  margin: 0;
+  font-size: clamp(2.5rem, 4.8vw, 4.7rem);
+  line-height: .98;
+  letter-spacing: -.055em;
+}
+
+.tracker-body .tracker-story-intro > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: .96rem;
+}
+
+.tracker-body .tracker-story-links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem;
+}
+
+.tracker-body .tracker-story-links > a {
+  --story-accent: var(--tracker-green);
+  min-width: 0;
+  min-height: 430px;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  border: 1px solid var(--line-dark);
+  border-top: 4px solid var(--story-accent);
+  border-radius: 8px;
+  background: linear-gradient(145deg, #18201c, #101512);
+  color: var(--white);
+  text-decoration: none;
+  box-shadow: 0 15px 36px rgba(17, 21, 19, .07);
+}
+
+.tracker-body .tracker-story-links > a:nth-child(2) { --story-accent: var(--tracker-blue); }
+.tracker-body .tracker-story-links > a:nth-child(3) { --story-accent: var(--tracker-purple); }
+
+.tracker-body .tracker-story-links > a:hover {
+  border-color: var(--story-accent);
+  transform: translateY(-2px);
+}
+
+.tracker-body .tracker-story-links > a:focus-visible {
+  outline-color: var(--story-accent);
+}
+
+.tracker-body .tracker-story-index {
+  color: var(--story-accent);
+  font: 800 .62rem ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .065em;
+  text-transform: uppercase;
+}
+
+.tracker-body .tracker-story-links strong {
+  max-width: 330px;
+  display: block;
+  margin: 2rem 0 1rem;
+  font-size: clamp(1.65rem, 2.6vw, 2.35rem);
+  line-height: 1.03;
+  letter-spacing: -.045em;
+}
+
+.tracker-body .tracker-story-links p {
+  margin: 0;
+  color: var(--muted-dark);
+  font-size: .78rem;
+}
+
+.tracker-body .tracker-story-links em {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line-dark);
+  color: var(--story-accent);
+  font: normal 750 .64rem ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .02em;
+}
+
+.tracker-body .tracker-story-links em b {
+  font-size: 1rem;
+}
+
+.tracker-body .tracker-story-all {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 1.25rem;
+  align-items: center;
+  margin-top: .75rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+}
+
+.tracker-body .tracker-story-all > span {
+  color: var(--accent-dark);
+  font: 800 .62rem ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.tracker-body .tracker-story-all p {
+  margin: 0;
+  color: var(--muted);
+  font-size: .72rem;
+}
+
+.tracker-body .tracker-story-all a {
+  color: var(--ink);
+  font-size: .7rem;
+  font-weight: 780;
+}
+
 .tracker-body .tracker-preview-section {
   padding: 6.5rem max(24px, calc((100vw - var(--max)) / 2));
   background: var(--charcoal);
@@ -916,6 +1047,11 @@
 
   .tracker-body .tracker-hero h1 { font-size: clamp(3.2rem, 13vw, 5rem); }
   .tracker-body .tracker-truth-panel { max-width: 620px; }
+  .tracker-body .tracker-story-intro,
+  .tracker-body .tracker-story-links { grid-template-columns: 1fr; }
+  .tracker-body .tracker-story-intro { align-items: start; gap: 1.5rem; }
+  .tracker-body .tracker-story-links > a { min-height: 350px; }
+  .tracker-body .tracker-story-all { grid-template-columns: 1fr; }
   .tracker-body .tracker-preview-section { padding-block: 5rem; }
   .tracker-body .tracker-preview-intro { align-items: start; flex-direction: column; }
   .tracker-body .tracker-synthetic-stamp { max-width: none; text-align: left; }
@@ -936,6 +1072,8 @@
   .tracker-body .tracker-hero { width: calc(100% - 32px); padding-block: 4rem; }
   .tracker-body .tracker-hero h1 { font-size: 3.1rem; }
   .tracker-body .tracker-preview-section { padding-inline: 16px; }
+  .tracker-body .tracker-story-section { padding-inline: 16px; }
+  .tracker-body .tracker-story-links > a { min-height: 330px; padding: 1.2rem; }
   .tracker-body .tracker-capability-grid,
   .tracker-body .tracker-governance-grid,
   .tracker-body .tracker-health-summary,

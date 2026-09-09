@@ -1,6 +1,5 @@
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -33,10 +32,24 @@ class HossTrackerReleaseTest(unittest.TestCase):
         renderer = (ROOT / "edge" / "render_edge_assets.py").read_text()
         worker = (ROOT / "edge" / "worker.js").read_text()
         self.assertIn('write_template("hosstracker.html", "hosstracker/index.html")', renderer)
+        self.assertIn('write_template("hosstracker_demo_hub.html", "hosstracker/demo/index.html")', renderer)
         self.assertIn('"hosstracker.css"', renderer)
+        self.assertIn('"hosstracker-demo-hub.css"', renderer)
         self.assertIn('"/static/hosstracker.css"', worker)
+        self.assertIn('"/static/hosstracker-demo-hub.css"', worker)
         self.assertIn('["/hosstracker", "/hosstracker/index.html"]', worker)
         self.assertIn('["/hosstracker/demo", "/hosstracker/demo/index.html"]', worker)
+        for slug in ("public-records", "dental-readiness", "prior-authorization"):
+            self.assertIn(
+                f'["/hosstracker/demo/{slug}", "/hosstracker/demo/{slug}/index.html"]',
+                worker,
+            )
+
+    def test_overview_links_to_each_concrete_story(self):
+        page = (ROOT / "templates" / "hosstracker.html").read_text()
+        self.assertIn("Three people. Three stuck processes. One operational language.", page)
+        for slug in ("public-records", "dental-readiness", "prior-authorization"):
+            self.assertIn(f'href="/hosstracker/demo/{slug}"', page)
 
 
 if __name__ == "__main__":

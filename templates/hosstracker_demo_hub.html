@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Choose a concrete HossTracker story: a delayed public-records request, a military dental handoff, or a healthcare prior authorization.">
+  <title>Choose a HossTracker Story — HossAgent</title>
+  {ga_script}
+  <link rel="stylesheet" href="/static/web.css">
+  <link rel="stylesheet" href="/static/hosstracker-demo-hub.css">
+</head>
+<body class="tracker-story-body">
+  <a class="skip-link" href="#main">Skip to HossTracker stories</a>
+
+  <header class="site-header tracker-story-header">
+    <a class="brand" href="/" aria-label="HossAgent home"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span><span class="brand-division">HossTracker</span></a>
+    <nav class="site-nav" aria-label="HossTracker demo navigation"><a href="#stories">Choose a story</a><a href="#what-you-will-see">What you will see</a><a href="/hosstracker">HossTracker overview</a></nav>
+    <div class="header-actions"><a class="text-link" href="/hosstracker">Back to HossTracker</a><a class="button button-small" href="/request-access">Request pilot access</a></div>
+  </header>
+
+  <main id="main">
+    <section class="tracker-story-hero" aria-labelledby="tracker-story-title">
+      <div>
+        <p class="eyebrow">Three concrete HossTracker stories</p>
+        <h1 id="tracker-story-title">Pick the problem that feels familiar.</h1>
+      </div>
+      <div class="tracker-story-hero-copy">
+        <p>A resident wants a police report. A military unit needs a dentist to return a form. A patient is waiting for an insurer. See exactly what is stuck, who needs to move it, and what the waiting person can safely be told.</p>
+        <p class="tracker-story-instruction"><span aria-hidden="true">↓</span> Start with public records for the clearest introduction.</p>
+      </div>
+    </section>
+
+    <aside class="tracker-story-boundary" aria-label="Demonstration boundary">
+      <span class="tracker-boundary-mark" aria-hidden="true">DEMO</span>
+      <div><strong>Everything in these walkthroughs is fictional and synthetic.</strong><p>No live person, agency, military unit, provider, insurer, record, document, message, assignment, or status is used. Nothing is sent or changed.</p></div>
+    </aside>
+
+    <section class="tracker-act-section" id="what-you-will-see" aria-labelledby="tracker-act-title">
+      <div class="tracker-act-intro"><p class="eyebrow">What every story shows</p><h2 id="tracker-act-title">The same four acts, in plain English.</h2></div>
+      <ol class="tracker-act-list">
+        <li><span>01</span><div><strong>What the waiting person sees</strong><p>The vague status or unanswered message they have today.</p></div></li>
+        <li><span>02</span><div><strong>What is actually happening</strong><p>The stage, owner, elapsed time, blocker, and handoff behind the delay.</p></div></li>
+        <li><span>03</span><div><strong>What should happen next</strong><p>A prepared action and a truthful status update, supported by the record.</p></div></li>
+        <li><span>04</span><div><strong>What a person must approve</strong><p>An authorized operator—not the demo—decides whether anything changes.</p></div></li>
+      </ol>
+    </section>
+
+    <section class="tracker-stories-section" id="stories" aria-labelledby="tracker-stories-title">
+      <div class="tracker-stories-heading">
+        <div><p class="eyebrow">Choose a walkthrough</p><h2 id="tracker-stories-title">Three ways important work disappears.</h2></div>
+        <p>Each guided story follows one piece of work from an unhelpful status to an accountable next step. No login is required.</p>
+      </div>
+
+      <div class="tracker-story-grid">
+        <article class="tracker-story-card tracker-story-public" aria-labelledby="public-records-story-title">
+          <header>
+            <div class="tracker-story-number" aria-hidden="true">01</div>
+            <div><p>Public records</p><span>Customer visibility + queue accountability</span></div>
+            <strong>Recommended first</strong>
+          </header>
+          <div class="tracker-story-card-copy">
+            <p class="tracker-story-question">“Where is my police report?”</p>
+            <h3 id="public-records-story-title">A request has sat in Initial Review for 13 days.</h3>
+          </div>
+          <dl class="tracker-story-facts">
+            <div><dt>Who is waiting</dt><dd>A resident who received a confirmation but no useful explanation.</dd></div>
+            <div><dt>What is stuck</dt><dd>The request is far beyond its two-business-day target. No accountable owner or blocker has been recorded.</dd></div>
+            <div><dt>What HossTracker shows</dt><dd>The overdue stage, missing owner, event history, next action, largest queue, and a customer-safe status.</dd></div>
+            <div><dt>What remains authorized</dt><dd>A supervisor must review the evidence before assigning an owner, escalating the item, or publishing an update.</dd></div>
+          </dl>
+          <a class="tracker-story-link" href="/hosstracker/demo/public-records" aria-describedby="public-records-story-title"><span>Run the public-records story</span><span aria-hidden="true">→</span></a>
+        </article>
+
+        <article class="tracker-story-card tracker-story-dental" aria-labelledby="dental-story-title">
+          <header>
+            <div class="tracker-story-number" aria-hidden="true">02</div>
+            <div><p>Military dental readiness</p><span>Unit ↔ civilian dental office</span></div>
+            <strong>Cross-organization handoff</strong>
+          </header>
+          <div class="tracker-story-card-copy">
+            <p class="tracker-story-question">“Hoss this dental verification.”</p>
+            <h3 id="dental-story-title">A unit needs a civilian dentist to return one completed form.</h3>
+          </div>
+          <dl class="tracker-story-facts">
+            <div><dt>Who is waiting</dt><dd>A Soldier and readiness team need confirmation; the dental office needs a clear request and return path.</dd></div>
+            <div><dt>What is stuck</dt><dd>A DD 2813 request is moving through email, attachments, phone calls, and “did you receive it?” follow-ups.</dd></div>
+            <div><dt>What HossTracker shows</dt><dd>One structured handoff with the request, deadline, receipt, questions, document return, and shared status—without joining databases.</dd></div>
+            <div><dt>What remains authorized</dt><dd>Authorized unit and dental-office personnel decide whether to send, accept, upload, disclose, or complete anything.</dd></div>
+          </dl>
+          <a class="tracker-story-link" href="/hosstracker/demo/dental-readiness" aria-describedby="dental-story-title"><span>Run the dental-readiness story</span><span aria-hidden="true">→</span></a>
+        </article>
+
+        <article class="tracker-story-card tracker-story-health" aria-labelledby="authorization-story-title">
+          <header>
+            <div class="tracker-story-number" aria-hidden="true">03</div>
+            <div><p>Healthcare prior authorization</p><span>Patient + provider + insurer</span></div>
+            <strong>Appropriate views for each role</strong>
+          </header>
+          <div class="tracker-story-card-copy">
+            <p class="tracker-story-question">“Why is this authorization stuck?”</p>
+            <h3 id="authorization-story-title">The insurer is waiting for clinical documentation the provider believes it sent.</h3>
+          </div>
+          <dl class="tracker-story-facts">
+            <div><dt>Who is waiting</dt><dd>A patient waiting for care, a provider waiting for a decision, and an insurer waiting for complete evidence.</dd></div>
+            <div><dt>What is stuck</dt><dd>The missing-document request has not reached the right person, while every party sees a different partial status.</dd></div>
+            <div><dt>What HossTracker shows</dt><dd>The dependency, owner, deadline, question and response—plus separate patient, provider, and insurer views with only appropriate detail.</dd></div>
+            <div><dt>What remains authorized</dt><dd>Qualified personnel decide what information may be requested, shared, accepted, or used to make the authorization decision.</dd></div>
+          </dl>
+          <a class="tracker-story-link" href="/hosstracker/demo/prior-authorization" aria-describedby="authorization-story-title"><span>Run the prior-authorization story</span><span aria-hidden="true">→</span></a>
+        </article>
+      </div>
+    </section>
+
+    <section class="tracker-story-cta" aria-labelledby="tracker-story-cta-title">
+      <div><p class="eyebrow">Your workflow next</p><h2 id="tracker-story-cta-title">Bring the queue your customers keep calling about.</h2><p>We will map the stages, owners, handoffs, timing rules, and safe status views around the system you already use.</p></div>
+      <div class="cta-actions"><a class="button button-ghost-dark" href="/hosstracker">Explore HossTracker</a><a class="button button-light" href="/request-access">Request pilot access <span aria-hidden="true">→</span></a></div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><a class="brand brand-footer" href="/"><span class="brand-mark" aria-hidden="true">H</span><span>HossAgent</span></a><nav aria-label="Footer navigation"><a href="/hosstracker">HossTracker</a><a href="#stories">Demo stories</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/request-access">Contact</a></nav><p>Fictional demonstrations only. HossTracker prepares accountable action; authorized people remain in control.</p></footer>
+</body>
+</html>

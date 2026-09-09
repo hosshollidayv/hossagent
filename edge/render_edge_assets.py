@@ -4,16 +4,20 @@ import html
 import shutil
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from product_demos import PRODUCT_DEMOS, serialize_product_demo
+from hosstracker_scenarios import (
+    HOSSTRACKER_SCENARIOS,
+    serialize_hosstracker_scenario,
+)
 from pipeline_health import PIPELINE_HEALTH
-
+from product_demos import PRODUCT_DEMOS, serialize_product_demo
 
 DIST = ROOT / "edge" / "dist"
-PUBLIC_PRODUCT_DEMOS = ("hosstracker", "public-sector", "private-sector")
+PUBLIC_PRODUCT_DEMOS = ("public-sector", "private-sector")
 
 
 def write_template(source: str, destination: str, replacements=None):
@@ -26,12 +30,31 @@ def write_template(source: str, destination: str, replacements=None):
     output.write_text(content)
 
 
+def demo_replacements(demo: dict[str, Any], serialized: str) -> dict[str, str]:
+    return {
+        "%%META_DESCRIPTION%%": html.escape(demo["intro"], quote=True),
+        "%%PRODUCT_NAME%%": html.escape(demo["productName"], quote=True),
+        "%%DEMO_THEME%%": html.escape(demo["theme"], quote=True),
+        "%%DIVISION%%": html.escape(demo["division"], quote=True),
+        "%%OVERVIEW_URL%%": html.escape(demo["overviewUrl"], quote=True),
+        "%%CATALOG_URL%%": html.escape(demo.get("catalogUrl", "/demos"), quote=True),
+        "%%CATALOG_LABEL%%": html.escape(demo.get("catalogLabel", "All demos"), quote=True),
+        "%%HEADLINE%%": html.escape(demo["headline"], quote=True),
+        "%%INTRO%%": html.escape(demo["intro"], quote=True),
+        "%%BOUNDARY%%": html.escape(demo["boundary"], quote=True),
+        "%%WORKSPACE%%": html.escape(demo["workspace"], quote=True),
+        "%%WORKSPACE_META%%": html.escape(demo["workspaceMeta"], quote=True),
+        "%%DEMO_CONFIG%%": serialized,
+    }
+
+
 if DIST.exists():
     shutil.rmtree(DIST)
 
 write_template("marketing_landing.html", "index.html")
 write_template("demos.html", "demos/index.html")
 write_template("hosstracker.html", "hosstracker/index.html")
+write_template("hosstracker_demo_hub.html", "hosstracker/demo/index.html")
 write_template("mission_intelligence.html", "mission-intelligence/index.html")
 write_template("mission_demo.html", "mission-intelligence/demo/index.html")
 write_template("operator.html", "operator/index.html")
@@ -115,26 +138,19 @@ for slug, pipeline in PIPELINE_HEALTH.items():
 
 for slug in PUBLIC_PRODUCT_DEMOS:
     demo = PRODUCT_DEMOS[slug]
-    values = {
-        "%%META_DESCRIPTION%%": html.escape(demo["intro"], quote=True),
-        "%%PRODUCT_NAME%%": html.escape(demo["productName"], quote=True),
-        "%%DEMO_THEME%%": html.escape(demo["theme"], quote=True),
-        "%%DIVISION%%": html.escape(demo["division"], quote=True),
-        "%%OVERVIEW_URL%%": html.escape(demo["overviewUrl"], quote=True),
-        "%%HEADLINE%%": html.escape(demo["headline"], quote=True),
-        "%%INTRO%%": html.escape(demo["intro"], quote=True),
-        "%%BOUNDARY%%": html.escape(demo["boundary"], quote=True),
-        "%%WORKSPACE%%": html.escape(demo["workspace"], quote=True),
-        "%%WORKSPACE_META%%": html.escape(demo["workspaceMeta"], quote=True),
-        "%%DEMO_CONFIG%%": serialize_product_demo(slug),
-    }
+    values = demo_replacements(demo, serialize_product_demo(slug))
     write_template("product_demo.html", f"{slug}/demo/index.html", values)
+
+for slug, demo in HOSSTRACKER_SCENARIOS.items():
+    values = demo_replacements(demo, serialize_hosstracker_scenario(slug))
+    write_template("product_demo.html", f"hosstracker/demo/{slug}/index.html", values)
 
 static_output = DIST / "static"
 static_output.mkdir(parents=True, exist_ok=True)
 for filename in (
     "web.css",
     "hosstracker.css",
+    "hosstracker-demo-hub.css",
     "mission-demo.css",
     "mission-demo.js",
     "portfolio-demo.css",

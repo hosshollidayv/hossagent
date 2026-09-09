@@ -12,9 +12,9 @@ Only public marketing, synthetic product previews, self-guided demos, legal page
 | Surface | Current capability | Readiness | Access |
 | --- | --- | --- | --- |
 | Marketing landing page | HossTracker-first positioning and four product paths | Customer-ready | Public |
-| Demo hub | Routes to four no-login walkthroughs, led by HossTracker | Customer-ready | Public |
+| Demo hub | Routes to three HossTracker use-case stories and three specialist no-login walkthroughs | Customer-ready | Public |
 | HossTracker overview | Synthetic Medicine Cabinet, item, role-safe status, and network-handoff preview | Customer-ready as a preview | Public |
-| HossTracker demo | Synthetic workflow-accountability and HossHandoff walkthrough | Customer-ready as a demo | Public |
+| HossTracker demos | Three synthetic stories: public-records accountability, military dental handoff, and healthcare prior authorization | Customer-ready as demos | Public |
 | Public Sector demo | Synthetic pursuit workflow and artifact preview | Customer-ready as a demo | Public |
 | Mission Release Gate overview | Synthetic interactive product preview | Customer-ready as a preview | Public |
 | Mission Release Gate demo | Synthetic release-decision walkthrough | Customer-ready as a demo | Public |
@@ -31,7 +31,7 @@ Only public marketing, synthetic product previews, self-guided demos, legal page
 
 ## Evidence behind the decision
 
-- The four customer-facing demo surfaces are explicitly synthetic, perform no external writes, require no account, and bound their claims in the UI.
+- The six customer-facing walkthroughs are explicitly synthetic, perform no external writes, require no account, and bound their claims in the UI. HossTracker offers three concrete stories through one use-case launchpad.
 - Property Intelligence remains intact in source and owner-only pipeline tooling, but its public card and demo artifact are not shipped in this release.
 - Pipeline repair controls persist only in browser `sessionStorage`; they do not repair live product connectors or data.
 - Mission Release Gate now preserves every evidence attempt, keeps accepted datasets immutable, binds events to an import revision, appends rather than overwrites decisions, fingerprints signed records, and blocks unsigned exports. It remains owner-only until the protected HTTP path, backup/restore behavior, and an external pilot are proven end to end.

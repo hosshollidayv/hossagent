@@ -81,6 +81,10 @@ from analytics import (
     EventType, get_analytics_summary, get_page_view_stats, get_funnel_stats
 )
 from product_demos import get_product_demo, serialize_product_demo
+from hosstracker_scenarios import (
+    get_hosstracker_scenario,
+    serialize_hosstracker_scenario,
+)
 
 def get_ga_script() -> str:
     """Generate Google Analytics 4 script tag if measurement ID is configured."""
@@ -775,15 +779,22 @@ def serve_product_demos(request: Request):
     return template.replace("{ga_script}", get_ga_script())
 
 
-@app.get("/public-sector/demo", response_class=HTMLResponse)
-@app.get("/private-sector/demo", response_class=HTMLResponse)
 @app.get("/hosstracker/demo", response_class=HTMLResponse)
-def serve_product_demo(request: Request):
-    """Render a configured, public, self-guided product decision walkthrough."""
-    slug = request.url.path.strip("/").split("/")[0]
-    demo = get_product_demo(slug)
-    if demo is None:
-        raise HTTPException(status_code=404, detail="Product demo not found")
+def serve_hosstracker_demo_hub(request: Request):
+    """Let a visitor choose a concrete, public HossTracker use-case story."""
+    track_page_view(
+        path=request.url.path,
+        referrer=request.headers.get("referer"),
+        user_agent=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None
+    )
+    with open("templates/hosstracker_demo_hub.html", "r") as f:
+        template = f.read()
+    return template.replace("{ga_script}", get_ga_script())
+
+
+def _render_guided_demo(request: Request, demo: dict, serialized_demo: str):
+    """Render one configured walkthrough through the shared guided-demo shell."""
     track_page_view(
         path=request.url.path,
         referrer=request.headers.get("referer"),
@@ -798,12 +809,14 @@ def serve_product_demo(request: Request):
         "%%DEMO_THEME%%": demo["theme"],
         "%%DIVISION%%": demo["division"],
         "%%OVERVIEW_URL%%": demo["overviewUrl"],
+        "%%CATALOG_URL%%": demo.get("catalogUrl", "/demos"),
+        "%%CATALOG_LABEL%%": demo.get("catalogLabel", "All demos"),
         "%%HEADLINE%%": demo["headline"],
         "%%INTRO%%": demo["intro"],
         "%%BOUNDARY%%": demo["boundary"],
         "%%WORKSPACE%%": demo["workspace"],
         "%%WORKSPACE_META%%": demo["workspaceMeta"],
-        "%%DEMO_CONFIG%%": serialize_product_demo(slug),
+        "%%DEMO_CONFIG%%": serialized_demo,
         "{ga_script}": get_ga_script(),
     }
     for token, value in replacements.items():
@@ -811,6 +824,30 @@ def serve_product_demo(request: Request):
             value = html_stdlib.escape(str(value), quote=True)
         template = template.replace(token, value)
     return template
+
+
+@app.get("/public-sector/demo", response_class=HTMLResponse)
+@app.get("/private-sector/demo", response_class=HTMLResponse)
+def serve_product_demo(request: Request):
+    """Render a configured, public, self-guided product decision walkthrough."""
+    slug = request.url.path.strip("/").split("/")[0]
+    demo = get_product_demo(slug)
+    if demo is None:
+        raise HTTPException(status_code=404, detail="Product demo not found")
+    return _render_guided_demo(request, demo, serialize_product_demo(slug))
+
+
+@app.get("/hosstracker/demo/{scenario_slug}", response_class=HTMLResponse)
+def serve_hosstracker_scenario_demo(request: Request, scenario_slug: str):
+    """Render one known, synthetic HossTracker use-case story."""
+    demo = get_hosstracker_scenario(scenario_slug)
+    if demo is None:
+        raise HTTPException(status_code=404, detail="HossTracker use case not found")
+    return _render_guided_demo(
+        request,
+        demo,
+        serialize_hosstracker_scenario(scenario_slug),
+    )
 
 
 @app.get("/property-intelligence/demo", response_class=RedirectResponse)

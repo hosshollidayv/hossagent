@@ -1,6 +1,5 @@
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,7 +34,8 @@ class EdgeReleaseTest(unittest.TestCase):
         self.assertNotIn('["/property-intelligence/demo",', edge_routes)
         self.assertIn('"/property-intelligence/demo"', worker)
         self.assertIn('new URL("/hosstracker/demo", request.url)', worker)
-        self.assertIn('PUBLIC_PRODUCT_DEMOS = ("hosstracker", "public-sector", "private-sector")', renderer)
+        self.assertIn('PUBLIC_PRODUCT_DEMOS = ("public-sector", "private-sector")', renderer)
+        self.assertIn("for slug, demo in HOSSTRACKER_SCENARIOS.items()", renderer)
         self.assertNotIn("Property Intelligence", public_landing)
         self.assertNotIn("Property Intelligence", public_demos)
         self.assertIn('"property-intelligence"', (ROOT / "product_demos.py").read_text())
@@ -156,7 +156,7 @@ class EdgeReleaseTest(unittest.TestCase):
         demos = (ROOT / "templates" / "demos.html").read_text()
         self.assertEqual(landing.count("Product access coming soon"), 2)
         self.assertIn("Limited pilot access", landing)
-        self.assertIn("Self-guided synthetic demo available now.", landing)
+        self.assertIn("Three self-guided synthetic use cases available now.", landing)
         self.assertIn("HossTracker", landing)
         self.assertLess(landing.index('id="hosstracker"'), landing.index('id="public-sector"'))
         self.assertNotIn('href="/signup"', landing)
@@ -197,6 +197,8 @@ class EdgeReleaseTest(unittest.TestCase):
             ROOT / "mission_intelligence.py",
             ROOT / "pipeline_health.py",
             ROOT / "product_demos.py",
+            ROOT / "hosstracker_scenario_dental.py",
+            ROOT / "hosstracker_scenario_healthcare.py",
             ROOT / "edge" / "worker.js",
         }
         for path in sorted(customer_facing_files):
