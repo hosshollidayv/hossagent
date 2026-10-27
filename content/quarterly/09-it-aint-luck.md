@@ -5,7 +5,7 @@ Deck: Original Log 14: the planned pickup fails to appear; a useful person does.
 
 I wanted a man holding a sign with my name on it.
 
-This was not because Frankfurt lacks transportation. It was because, after enough travel, a sign reading HERR HOLLIDAY means someone else has solved the next twenty minutes. You may stop making decisions. You have been expected.
+This was not because Frankfurt lacks transportation. It was because, after enough travel, a sign bearing my surname means someone else has solved the next twenty minutes. You may stop making decisions. You have been expected.
 
 The expected pickup did not materialize within the time I gave it. I found another driver, loaded the expedition, and went to Wiesbaden.
 

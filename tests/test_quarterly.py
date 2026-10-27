@@ -34,6 +34,13 @@ class QuarterlyTests(unittest.TestCase):
         for term in ('@army.mil','@mail.smil.mil','CS8797979','CS8776501','SIPR','OPORD','Fight Tonight','Taunusstraße 22'):
             self.assertNotIn(term,text)
 
+    def test_rendered_journal_omits_author_identity_and_unit_names(self):
+        import re
+        pages = [render_index()] + [render_article(e['slug']) for e in entries()]
+        forbidden = r'\b(?:Samuel|Sam|Holliday|COIC|7ATC|7th Army Training Command|SOUTHCOM|EUCOM|209th|USAREUR(?:-AF)?)\b'
+        for page in pages:
+            self.assertIsNone(re.search(forbidden, page, re.IGNORECASE))
+
     def test_render_is_csp_compatible_and_complete(self):
         for page in [render_index()]+[render_article(e['slug']) for e in entries()]:
             self.assertNotIn('%%',page)

@@ -15,7 +15,7 @@ He nursed it back to working order and sent it to me for my birthday.
 
 This is an inconvenient development for anyone attempting to reason about watches primarily through specifications. The old watch has acquired an advantage that cannot be added to a comparison table. My father kept something I had stopped keeping track of. Then he put effort into making it useful to me again.
 
-It is now my COIC watch.
+It is now my work watch.
 
 The younger version of me wanted it to suggest a certain kind of adulthood. The current version wears it with a different understanding of the adults who were already there: a father who held onto it, and another man whose watch once seemed to contain an explanation of how the world worked.
 
