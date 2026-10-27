@@ -13,6 +13,7 @@ from hosstracker_scenarios import (
     HOSSTRACKER_SCENARIOS,
     serialize_hosstracker_scenario,
 )
+from quarterly import build as build_quarterly
 from pipeline_health import PIPELINE_HEALTH
 from product_demos import PRODUCT_DEMOS, serialize_product_demo
 
@@ -145,9 +146,13 @@ for slug, demo in HOSSTRACKER_SCENARIOS.items():
     values = demo_replacements(demo, serialize_hosstracker_scenario(slug))
     write_template("product_demo.html", f"hosstracker/demo/{slug}/index.html", values)
 
+build_quarterly(DIST)
+
 static_output = DIST / "static"
 static_output.mkdir(parents=True, exist_ok=True)
 for filename in (
+    "quarterly.css",
+    "quarterly.js",
     "web.css",
     "hosstracker.css",
     "hosstracker-demo-hub.css",

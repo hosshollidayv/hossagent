@@ -29,6 +29,8 @@ const RETIRED_PUBLIC_ROUTES = new Set([
 ]);
 
 const EDGE_ASSETS = new Set([
+  "/static/quarterly.css",
+  "/static/quarterly.js",
   "/static/web.css",
   "/static/hosstracker.css",
   "/static/hosstracker-demo-hub.css",
@@ -394,6 +396,14 @@ export default {
       request.method === "GET" || request.method === "HEAD"
     )) {
       return Response.redirect(new URL("/hosstracker/demo", request.url), 302);
+    }
+    if (url.pathname === "/quarterly" || url.pathname.startsWith("/quarterly/")) {
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        return new Response("Method not allowed", { status: 405, headers: { Allow: "GET, HEAD" } });
+      }
+      const normalized = url.pathname.replace(/\/$/, "");
+      const journalPath = normalized.endsWith("/index.html") ? normalized : `${normalized}/index.html`;
+      return edgeAsset(request, env, journalPath, true);
     }
     const pageAsset = EDGE_ROUTES.get(url.pathname);
     if (pageAsset && (request.method === "GET" || request.method === "HEAD")) {

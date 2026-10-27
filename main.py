@@ -723,6 +723,23 @@ def serve_marketing_landing(request: Request):
     return template.replace("{ga_script}", get_ga_script())
 
 
+@app.get("/quarterly", response_class=HTMLResponse)
+@app.get("/quarterly/", response_class=HTMLResponse)
+def serve_quarterly():
+    from quarterly import render_index
+    return HTMLResponse(render_index())
+
+
+@app.get("/quarterly/{slug}", response_class=HTMLResponse)
+@app.get("/quarterly/{slug}/", response_class=HTMLResponse)
+def serve_quarterly_article(slug: str):
+    from quarterly import render_article
+    page = render_article(slug)
+    if page is None:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+    return HTMLResponse(page)
+
+
 @app.get("/hosstracker", response_class=HTMLResponse)
 def serve_hosstracker(request: Request):
     """HossTracker: operational truth for work moving through institutional queues."""
